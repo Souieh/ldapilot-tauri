@@ -15,9 +15,10 @@ interface ACE {
 
 interface ObjectPermissionsProps {
   dn: string;
+  hideCard?: boolean;
 }
 
-export function ObjectPermissions({ dn }: ObjectPermissionsProps) {
+export function ObjectPermissions({ dn, hideCard = false }: ObjectPermissionsProps) {
   const [permissions, setPermissions] = useState<ACE[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -51,15 +52,8 @@ export function ObjectPermissions({ dn }: ObjectPermissionsProps) {
     );
   }
 
-  return (
-    <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b flex items-center justify-between">
-        <h3 className="font-semibold flex items-center gap-2">
-          <Shield className="h-4 w-4 text-primary" />
-          Attribute-Level Permissions (ACLs)
-        </h3>
-      </div>
-      <div className="p-0">
+  const content = (
+    <div className="p-0">
         {permissions.length > 0 ? (
           <div className="divide-y max-h-[500px] overflow-y-auto">
             {permissions.map((ace, idx) => (
@@ -111,7 +105,20 @@ export function ObjectPermissions({ dn }: ObjectPermissionsProps) {
             </div>
           </div>
         )}
+    </div>
+  );
+
+  if (hideCard) return content;
+
+  return (
+    <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b flex items-center justify-between">
+        <h3 className="font-semibold flex items-center gap-2">
+          <Shield className="h-4 w-4 text-primary" />
+          Attribute-Level Permissions (ACLs)
+        </h3>
       </div>
+      {content}
     </div>
   );
 }
