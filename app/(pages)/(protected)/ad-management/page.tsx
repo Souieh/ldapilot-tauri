@@ -7,7 +7,7 @@ import { DeleteOUModal } from '@/components/ad/delete-ou-modal';
 import { ManageGroupsModal } from '@/components/ad/manage-groups-modal';
 import { MoveObjectModal } from '@/components/ad/move-object-modal';
 import { ObjectMembersModal } from '@/components/ad/object-members';
-import { ObjectPropertiesModal } from '@/components/ad/object-properties';
+import { ObjectPropertiesModal } from '@/components/ad/ObjectProperties';
 import { ToggleStatusModal } from '@/components/ad/toggle-status-modal';
 import { UpdatePasswordModal } from '@/components/ad/update-password-modal';
 import { DataTable, DataTableColumn } from '@/components/data/data-table';

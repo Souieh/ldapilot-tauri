@@ -1,21 +1,15 @@
 'use client';
 
 import { Modal } from '@/components/ui/modal';
-import { Info, Shield, Users, Users2 } from 'lucide-react';
-import { FC, useMemo } from 'react';
+import { Edit, Info, Shield, Users, Users2, Loader2 } from 'lucide-react';
+import { FC, useMemo, useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ObjectMembers } from './object-members';
 import { ObjectParents } from './object-parents';
 import { ObjectPermissions } from './object-permissions';
-
-interface Object {
-  dn: string;
-  cn: string;
-  sAMAccountName: string;
-  displayName?: string;
-  mail?: string;
-  type: 'User' | 'Group' | 'Computer' | 'Unknown';
-}
+import { ObjectInfo } from './ObjectInfo';
+import { ObjectEdit } from './ObjectEdit';
+import { toast } from 'sonner';
 
 interface GroupObjectsProps {
   objectDN: string;
@@ -26,18 +20,26 @@ interface GroupObjectsModalProps extends GroupObjectsProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
 const tabs: {
   key: string;
   title: string;
   icon?: any;
   content: FC<any>;
-  hideFor?: string[];
+  showFor?: string[];
 }[] = [
   {
-    key: 'Info',
+    key: 'Details',
     icon: <Info className='h-4 w-4 text-primary' />,
-    title: 'Info',
-    content: () => <p></p>,
+    title: 'Details',
+    content: ObjectInfo,
+  },
+  {
+    key: 'Edit',
+    icon: <Edit className='h-4 w-4 text-primary' />,
+    title: 'Edit',
+    content: ObjectEdit,
+    showFor: ['user', 'group'],
   },
   {
     key: 'Member Of',
@@ -50,7 +52,7 @@ const tabs: {
     icon: <Users2 className='h-4 w-4 text-primary' />,
     title: 'Members',
     content: ObjectMembers,
-    hideFor: ['group'],
+    showFor: ['group'],
   },
   {
     key: 'Permissions',
@@ -59,11 +61,44 @@ const tabs: {
     content: ObjectPermissions,
   },
 ];
+
 export function ObjectProperties({ objectDN, objectName, objectType }: GroupObjectsProps) {
+  const [item, setItem] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadDetails = async () => {
+    try {
+      setIsLoading(true);
+      const res = await fetch(`/api/ldap/objects/details?dn=${encodeURIComponent(objectDN)}`);
+      if (!res.ok) throw new Error('Failed to load object details');
+      const data = await res.json();
+      setItem(data);
+    } catch (error) {
+      console.error(error);
+      toast.error('Error loading details');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDetails();
+  }, [objectDN]);
+
   const availableTabs = useMemo(
-    () => tabs.filter((t) => !t.hideFor || t.hideFor.includes(objectType)),
+    () => tabs.filter((t) => !t.showFor || t.showFor.includes(objectType.toLowerCase())),
     [objectType]
   );
+
+  if (isLoading) {
+    return (
+      <div className='flex flex-col items-center justify-center min-h-[400px] bg-card border rounded-xl shadow-sm'>
+        <Loader2 className='h-8 w-8 animate-spin text-primary mb-4' />
+        <p className='text-muted-foreground text-sm'>Loading details...</p>
+      </div>
+    );
+  }
+
   return (
     <div className='space-y-4 p-2'>
       <div className='flex-1 min-w-0 bg-card border rounded-xl shadow-sm flex flex-col overflow-hidden'>
@@ -81,8 +116,13 @@ export function ObjectProperties({ objectDN, objectName, objectType }: GroupObje
 
           <div className='flex-1 overflow-y-auto bg-muted/20'>
             {availableTabs.map((tab) => (
-              <TabsContent value={tab.key} className='m-0 focus-visible:ring-0 p-2'>
-                <tab.content objectDN={objectDN} objectName={objectName} />
+              <TabsContent key={tab.key} value={tab.key} className='m-0 focus-visible:ring-0 p-2'>
+                <tab.content
+                  objectDN={objectDN}
+                  objectName={objectName}
+                  item={item}
+                  onSuccess={loadDetails}
+                />
               </TabsContent>
             ))}
           </div>
@@ -103,8 +143,8 @@ export function ObjectPropertiesModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Objects: ${objectName}`}
-      description={`Viewing all objects of the group "${objectName}"`}
+      title={`Properties: ${objectName}`}
+      description={`Viewing and managing properties for "${objectName}"`}
       size='lg'
     >
       <ObjectProperties objectDN={objectDN} objectName={objectName} objectType={objectType} />
