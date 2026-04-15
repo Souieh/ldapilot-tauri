@@ -1,7 +1,7 @@
 'use client';
 
 import { Modal } from '@/components/ui/modal';
-import { Edit, Info, Shield, Users, Users2, Loader2 } from 'lucide-react';
+import { Edit, Info, Shield, Users, Users2, Loader2, Settings } from 'lucide-react';
 import { FC, useMemo, useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ObjectMembers } from './object-members';
@@ -9,6 +9,7 @@ import { ObjectParents } from './object-parents';
 import { ObjectPermissions } from './object-permissions';
 import { ObjectInfo } from './ObjectInfo';
 import { ObjectEdit } from './ObjectEdit';
+import { ObjectAccount } from './ObjectAccount';
 import { toast } from 'sonner';
 
 interface GroupObjectsProps {
@@ -40,6 +41,13 @@ const tabs: {
     title: 'Edit',
     content: ObjectEdit,
     showFor: ['user', 'group'],
+  },
+  {
+    key: 'Account',
+    icon: <Settings className='h-4 w-4 text-primary' />,
+    title: 'Account',
+    content: ObjectAccount,
+    showFor: ['user', 'computer'],
   },
   {
     key: 'Member Of',
