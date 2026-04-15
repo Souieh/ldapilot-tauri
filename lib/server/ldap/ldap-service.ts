@@ -11,6 +11,7 @@ import {
 } from './ldap-objects';
 import { createOU, deleteOU, searchOUs } from './ldap-ous';
 import { getGroupMembers, getObjectByDN, searchComputers, searchGroups, searchUsers } from './ldap-search';
+import { getObjectPermissions } from './ldap-permissions';
 
 export class LDAPService {
   async createObject(
@@ -133,6 +134,15 @@ export class LDAPService {
     dn: string
   ): Promise<any> {
     return getObjectByDN(config, userDN, password, dn);
+  }
+
+  async getObjectPermissions(
+    config: LDAPConfig,
+    userDN: string,
+    password: string,
+    dn: string
+  ) {
+    return getObjectPermissions(config, userDN, password, dn);
   }
 
   async getDashboardStats(

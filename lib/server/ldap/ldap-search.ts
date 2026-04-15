@@ -95,15 +95,25 @@ export async function getGroupMembers(
     // and we want type info, we can do a search with a filter for these DNs if they are in the same domain.
     // However, the most robust way is to fetch them.
 
-    const results = await Promise.all(memberDNs.map(async (dn) => {
+    // 2. Fetch details for each member efficiently
+    // We can use a search on the baseDN with an OR filter of distinguishedName
+    // To avoid too large filters, we can chunk the requests if needed (e.g. 50 at a time)
+    const chunkSize = 50;
+    const allResults = [];
+
+    for (let i = 0; i < memberDNs.length; i += chunkSize) {
+      const chunk = memberDNs.slice(i, i + chunkSize);
+      const filter = `(|${chunk.map(dn => `(distinguishedName=${dn})`).join('')})`;
+
       try {
-        const { searchEntries } = await client.search(String(dn), {
-          scope: 'base',
+        const { searchEntries } = await client.search(config.baseDN, {
+          filter,
+          scope: 'sub',
           attributes: ['dn', 'cn', 'sAMAccountName', 'objectClass', 'displayName', 'mail'],
         });
-        if (searchEntries.length > 0) {
-          const entry = searchEntries[0];
-          const objectClass = entry.objectClass as string[];
+
+        const chunkResults = searchEntries.map(entry => {
+          const objectClass = (entry.objectClass || []) as string[];
           let type = 'Unknown';
           if (objectClass.includes('user')) type = 'User';
           else if (objectClass.includes('group')) type = 'Group';
@@ -117,14 +127,14 @@ export async function getGroupMembers(
             mail: entry.mail,
             type,
           };
-        }
+        });
+        allResults.push(...chunkResults);
       } catch (e) {
-        console.error(`Error fetching member ${dn}:`, e);
+        console.error(`Error fetching member chunk:`, e);
       }
-      return null;
-    }));
+    }
 
-    return results.filter(Boolean);
+    return allResults;
   } finally {
     await client.unbind();
   }

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft, Loader2, User, Users2, Monitor, Mail, Shield, Calendar, Clock, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
 import { getAccountStatus, isAccountEnabled } from '@/lib/constants/ldap-attributes';
+import { ObjectPermissions } from '@/components/ad/object-permissions';
 
 function DetailsContent() {
   const searchParams = useSearchParams();
@@ -222,6 +223,9 @@ function DetailsContent() {
                 </div>
               )}
             </div>
+
+            {/* Permissions Section */}
+            <ObjectPermissions dn={item.dn} />
           </div>
         </div>
       </div>
