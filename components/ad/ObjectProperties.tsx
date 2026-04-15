@@ -1,7 +1,7 @@
 'use client';
 
 import { Modal } from '@/components/ui/modal';
-import { Edit, Info, Shield, Users, Users2, Loader2, Settings } from 'lucide-react';
+import { Edit, Info, Shield, Users, Users2, Loader2, Settings, UserCircle, Briefcase, MapPin, Phone } from 'lucide-react';
 import { FC, useMemo, useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ObjectMembers } from './object-members';
@@ -22,25 +22,78 @@ interface GroupObjectsModalProps extends GroupObjectsProps {
   onClose: () => void;
 }
 
-const tabs: {
+interface TabConfig {
   key: string;
   title: string;
   icon?: any;
   content: FC<any>;
   showFor?: string[];
-}[] = [
+  props?: Record<string, any>;
+}
+
+const tabs: TabConfig[] = [
   {
     key: 'Details',
     icon: <Info className='h-4 w-4 text-primary' />,
     title: 'Details',
     content: ObjectInfo,
   },
+  // User/Group specific edit tabs (Unified)
   {
-    key: 'Edit',
-    icon: <Edit className='h-4 w-4 text-primary' />,
-    title: 'Edit',
+    key: 'Identity',
+    icon: <UserCircle className='h-4 w-4 text-primary' />,
+    title: 'Identity',
     content: ObjectEdit,
-    showFor: ['user', 'group'],
+    showFor: ['user'],
+    props: { group: 'Identity' }
+  },
+  {
+    key: 'General',
+    icon: <UserCircle className='h-4 w-4 text-primary' />,
+    title: 'General',
+    content: ObjectEdit,
+    showFor: ['group'],
+    props: { group: 'General' }
+  },
+  {
+    key: 'Account-Fields',
+    icon: <Settings className='h-4 w-4 text-primary' />,
+    title: 'Account Info',
+    content: ObjectEdit,
+    showFor: ['user'],
+    props: { group: 'Account' }
+  },
+  {
+    key: 'Organization',
+    icon: <Briefcase className='h-4 w-4 text-primary' />,
+    title: 'Organization',
+    content: ObjectEdit,
+    showFor: ['user'],
+    props: { group: 'Organization' }
+  },
+  {
+    key: 'Contact',
+    icon: <Phone className='h-4 w-4 text-primary' />,
+    title: 'Contact',
+    content: ObjectEdit,
+    showFor: ['user'],
+    props: { group: 'Contact' }
+  },
+  {
+    key: 'Address',
+    icon: <MapPin className='h-4 w-4 text-primary' />,
+    title: 'Address',
+    content: ObjectEdit,
+    showFor: ['user'],
+    props: { group: 'Address' }
+  },
+  {
+    key: 'Settings',
+    icon: <Settings className='h-4 w-4 text-primary' />,
+    title: 'Settings',
+    content: ObjectEdit,
+    showFor: ['group'],
+    props: { group: 'Settings' }
   },
   {
     key: 'Account',
@@ -111,8 +164,8 @@ export function ObjectProperties({ objectDN, objectName, objectType }: GroupObje
     <div className='space-y-4 p-2'>
       <div className='flex-1 min-w-0 bg-card border rounded-xl shadow-sm flex flex-col overflow-hidden'>
         <Tabs defaultValue={availableTabs[0].key}>
-          <div className='px-4 pt-4 bg-muted/20 inline-flex'>
-            <TabsList className=' flex-1 flex-start'>
+          <div className='px-4 pt-4 bg-muted/20 inline-flex overflow-x-auto no-scrollbar'>
+            <TabsList className='flex-start whitespace-nowrap'>
               {availableTabs.map((t) => (
                 <TabsTrigger key={t.key} value={t.key} className='gap-2'>
                   {t.icon}
@@ -130,6 +183,7 @@ export function ObjectProperties({ objectDN, objectName, objectType }: GroupObje
                   objectName={objectName}
                   item={item}
                   onSuccess={loadDetails}
+                  {...(tab.props || {})}
                 />
               </TabsContent>
             ))}

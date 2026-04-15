@@ -1,22 +1,18 @@
 'use client';
 
-import { ADGroupForm } from '@/components/ad/ad-group-form';
-import { ADUserForm } from '@/components/ad/ad-user-form';
-import { Modal } from '@/components/ui/modal';
+import { groupFields } from '@/components/ad/ad-group-form';
+import { userFields } from '@/components/ad/ad-user-form';
+import { DynamicForm, FormField } from '@/components/forms/dynamic-form';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 
 interface ObjectEditProps {
   item: any;
   onSuccess?: () => void;
+  group?: string;
 }
 
-interface ObjectEditModalProps extends ObjectEditProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
-
-export function ObjectEdit({ item, onSuccess }: ObjectEditProps) {
+export function ObjectEdit({ item, onSuccess, group }: ObjectEditProps) {
   const [values, setValues] = useState<Record<string, any>>(item || {});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -66,56 +62,32 @@ export function ObjectEdit({ item, onSuccess }: ObjectEditProps) {
     }
   };
 
+  const fields = isUser ? userFields : isGroup ? groupFields : [];
+  const filteredFields = group
+    ? fields.filter(f => (f.group || 'General') === group)
+    : fields;
+
+  if (filteredFields.length === 0) {
+    return (
+      <div className='p-8 text-center border rounded-lg bg-muted/20'>
+        <p className='text-muted-foreground italic'>
+          No editable fields available for this section.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className='space-y-4 py-2'>
-      {isUser ? (
-        <ADUserForm
-          values={values}
-          onChange={handleChange}
-          onSubmit={handleSubmit}
-          isSubmitting={isSubmitting}
-          isEditMode={true}
-        />
-      ) : isGroup ? (
-        <ADGroupForm
-          values={values}
-          onChange={handleChange}
-          onSubmit={handleSubmit}
-          isSubmitting={isSubmitting}
-          isEditMode={true}
-        />
-      ) : (
-        <div className='p-8 text-center border rounded-lg bg-muted/20'>
-          <p className='text-muted-foreground italic'>
-            Editing is not yet supported for this object type.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function ObjectEditModal({
-  isOpen,
-  onClose,
-  item,
-  onSuccess,
-}: ObjectEditModalProps) {
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={`Edit: ${item?.displayName || item?.cn || 'Object'}`}
-      description='Update Active Directory object properties'
-      size='lg'
-    >
-      <ObjectEdit
-        item={item}
-        onSuccess={() => {
-          if (onSuccess) onSuccess();
-          onClose();
-        }}
+      <DynamicForm
+        fields={filteredFields}
+        values={values}
+        onChange={handleChange}
+        onSubmit={handleSubmit}
+        submitLabel='Update'
+        isSubmitting={isSubmitting}
+        layout='grid'
       />
-    </Modal>
+    </div>
   );
 }
