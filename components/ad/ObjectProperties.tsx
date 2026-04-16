@@ -157,12 +157,12 @@ export function ObjectProperties({
         </div>
       </div>
 
-      <div className='flex-1 min-w-0 bg-card border rounded-xl shadow-sm flex flex-col overflow-hidden h-[600px]'>
-        <Tabs defaultValue={availableTabs[0].key} className="flex flex-col h-full">
-          <div className='px-4 pt-4 bg-muted/20 inline-flex overflow-x-auto no-scrollbar'>
-            <TabsList className='flex-start whitespace-nowrap'>
+      <div className='min-w-0 bg-card border rounded-xl shadow-sm flex flex-col'>
+        <Tabs defaultValue={availableTabs[0].key} className="flex flex-col">
+          <div className='px-4 pt-4 bg-muted/20 inline-flex sticky top-0 z-20 border-b'>
+            <TabsList className='flex-start whitespace-nowrap mb-[-1px]'>
               {availableTabs.map((t) => (
-                <TabsTrigger key={t.key} value={t.key} className='gap-2'>
+                <TabsTrigger key={t.key} value={t.key} className='gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent shadow-none'>
                   {t.icon}
                   {t.title}
                 </TabsTrigger>
@@ -170,9 +170,9 @@ export function ObjectProperties({
             </TabsList>
           </div>
 
-          <div className='flex-1 bg-muted/20 overflow-y-auto'>
+          <div className='bg-muted/20'>
             {availableTabs.map((tab) => (
-              <TabsContent key={tab.key} value={tab.key} className='m-0 focus-visible:ring-0 p-2 h-full'>
+              <TabsContent key={tab.key} value={tab.key} className='m-0 focus-visible:ring-0 p-4'>
                 <tab.content
                   objectDN={currentDN}
                   objectName={objectName}
