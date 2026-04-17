@@ -160,7 +160,7 @@ export function ObjectProperties({
           {error}. This may be due to a temporary connection issue or the object being moved or deleted.
         </p>
         <Button onClick={() => loadDetails()} className='gap-2'>
-          <Edit className='h-4 w-4 rotate-180' />
+          <RotateCcw className='h-4 w-4' />
           Retry Connection
         </Button>
       </div>

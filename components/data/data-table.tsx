@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { ChevronUp, ChevronDown, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export interface DataTableColumn<T> {
   id: string;
@@ -17,6 +18,7 @@ export interface DataTableProps<T> {
   columns: DataTableColumn<T>[];
   data: T[];
   onView?: (item: T) => void;
+  onSelectionChange?: (selectedItems: T[]) => void;
   searchKey?: keyof T;
   searchValue?: string;
   isLoading?: boolean;
@@ -30,11 +32,14 @@ export function DataTable<T extends { id?: string; dn?: string }>(
     columns,
     data,
     onView,
+    onSelectionChange,
     searchKey,
     searchValue = '',
     isLoading = false,
     emptyMessage = 'No data found',
   } = props;
+
+  const [selectedDNs, setSelectedDNs] = useState<Set<string>>(new Set());
 
   const [sortConfig, setSortConfig] = useState<{
     key: keyof T | null;
@@ -71,6 +76,31 @@ export function DataTable<T extends { id?: string; dn?: string }>(
     }));
   };
 
+  const toggleSelectAll = (checked: boolean) => {
+    const newSelected = new Set<string>();
+    if (checked) {
+      sortedData.forEach((item) => {
+        if (item.dn) newSelected.add(item.dn);
+      });
+    }
+    setSelectedDNs(newSelected);
+    onSelectionChange?.(checked ? sortedData : []);
+  };
+
+  const toggleSelectItem = (checked: boolean, item: T) => {
+    if (!item.dn) return;
+    const newSelected = new Set(selectedDNs);
+    if (checked) {
+      newSelected.add(item.dn);
+    } else {
+      newSelected.delete(item.dn);
+    }
+    setSelectedDNs(newSelected);
+
+    const selectedItems = sortedData.filter(i => i.dn && newSelected.has(i.dn));
+    onSelectionChange?.(selectedItems);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -92,6 +122,14 @@ export function DataTable<T extends { id?: string; dn?: string }>(
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border bg-muted/50">
+            {onSelectionChange && (
+              <th className="h-12 px-4 py-2 w-10">
+                <Checkbox
+                  checked={sortedData.length > 0 && selectedDNs.size === sortedData.length}
+                  onCheckedChange={toggleSelectAll}
+                />
+              </th>
+            )}
             {columns.map((column) => (
               <th
                 key={column.id}
@@ -128,6 +166,14 @@ export function DataTable<T extends { id?: string; dn?: string }>(
               key={idx}
               className="border-b border-border hover:bg-muted/50 transition-colors"
             >
+              {onSelectionChange && (
+                <td className="px-4 py-3">
+                  <Checkbox
+                    checked={item.dn ? selectedDNs.has(item.dn) : false}
+                    onCheckedChange={(checked) => toggleSelectItem(!!checked, item)}
+                  />
+                </td>
+              )}
               {columns.map((column) => (
                 <td key={column.id} className="px-4 py-3">
                   {column.render

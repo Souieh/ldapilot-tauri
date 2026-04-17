@@ -4,6 +4,7 @@ import { ADObjectFormModal } from '@/components/ad/ad-object-form-modal';
 import { CreateOUModal } from '@/components/ad/create-ou-modal';
 import { DeleteObjectModal } from '@/components/ad/delete-object-modal';
 import { DeleteOUModal } from '@/components/ad/delete-ou-modal';
+import { BulkMoveModal } from '@/components/ad/bulk-move-modal';
 import { ObjectPropertiesModal } from '@/components/ad/ObjectProperties';
 import { DataTable, DataTableColumn } from '@/components/data/data-table';
 import { FilterForm } from '@/components/forms/filter-form';
@@ -46,6 +47,8 @@ export default function ADManagementPage() {
   const [formType, setFormType] = useState<'user' | 'group' | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isOuSheetOpen, setIsOuSheetOpen] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<any[]>([]);
+  const [isBulkMoveOpen, setIsBulkMoveOpen] = useState(false);
 
   useEffect(() => {
     loadOUs();
@@ -88,6 +91,7 @@ export default function ADManagementPage() {
     setSelectedOuDN(ouDN);
     setSearchValue('');
     setIsOuSheetOpen(false);
+    setSelectedItems([]);
     setUsers([]);
     setComputers([]);
     setGroups([]);
@@ -152,6 +156,7 @@ export default function ADManagementPage() {
   const handleObjectTypeChange = async (type: ObjectType) => {
     setObjectType(type);
     setSearchValue('');
+    setSelectedItems([]);
 
     if (selectedOuDN) {
       try {
@@ -400,12 +405,20 @@ export default function ADManagementPage() {
                   <TabsContent value='user' className='space-y-4'>
                     <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
                       <FilterForm onSearch={setSearchValue} searchPlaceholder='Search users...' />
-                      <Button size='sm' onClick={() => openCreateForm('user')}>{UI_LABELS.ad.addUser}</Button>
+                      <div className='flex gap-2'>
+                        {selectedItems.length > 0 && (
+                          <Button variant='outline' size='sm' onClick={() => setIsBulkMoveOpen(true)}>
+                            Move Selected ({selectedItems.length})
+                          </Button>
+                        )}
+                        <Button size='sm' onClick={() => openCreateForm('user')}>{UI_LABELS.ad.addUser}</Button>
+                      </div>
                     </div>
                     <DataTable
                       columns={userColumns}
                       data={users}
                       onView={handleView}
+                      onSelectionChange={setSelectedItems}
                       searchKey='displayName'
                       searchValue={searchValue}
                       isLoading={isLoading}
@@ -413,11 +426,19 @@ export default function ADManagementPage() {
                   </TabsContent>
 
                   <TabsContent value='computer' className='space-y-4'>
-                    <FilterForm onSearch={setSearchValue} searchPlaceholder='Search computers...' />
+                    <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+                      <FilterForm onSearch={setSearchValue} searchPlaceholder='Search computers...' />
+                      {selectedItems.length > 0 && (
+                        <Button variant='outline' size='sm' onClick={() => setIsBulkMoveOpen(true)}>
+                          Move Selected ({selectedItems.length})
+                        </Button>
+                      )}
+                    </div>
                     <DataTable
                       columns={computerColumns}
                       data={computers}
                       onView={handleView}
+                      onSelectionChange={setSelectedItems}
                       searchKey='cn'
                       searchValue={searchValue}
                       isLoading={isLoading}
@@ -427,12 +448,20 @@ export default function ADManagementPage() {
                   <TabsContent value='group' className='space-y-4'>
                     <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
                       <FilterForm onSearch={setSearchValue} searchPlaceholder='Search groups...' />
-                      <Button size='sm' onClick={() => openCreateForm('group')}>{UI_LABELS.ad.addGroup}</Button>
+                      <div className='flex gap-2'>
+                        {selectedItems.length > 0 && (
+                          <Button variant='outline' size='sm' onClick={() => setIsBulkMoveOpen(true)}>
+                            Move Selected ({selectedItems.length})
+                          </Button>
+                        )}
+                        <Button size='sm' onClick={() => openCreateForm('group')}>{UI_LABELS.ad.addGroup}</Button>
+                      </div>
                     </div>
                     <DataTable
                       columns={groupColumns}
                       data={groups}
                       onView={handleView}
+                      onSelectionChange={setSelectedItems}
                       searchKey='cn'
                       searchValue={searchValue}
                       isLoading={isLoading}
@@ -490,6 +519,16 @@ export default function ADManagementPage() {
         }}
       />
 
+      <BulkMoveModal
+        isOpen={isBulkMoveOpen}
+        onClose={() => setIsBulkMoveOpen(false)}
+        selectedItems={selectedItems}
+        ous={ous}
+        onSuccess={async () => {
+          setSelectedItems([]);
+          await refreshCurrentData();
+        }}
+      />
     </>
   );
 }
