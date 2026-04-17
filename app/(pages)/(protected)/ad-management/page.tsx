@@ -421,7 +421,12 @@ export default function ADManagementPage() {
           propertiesItem?.objectClass?.includes('computer') ? 'computer' :
           propertiesItem?.objectClass?.includes('group') ? 'group' : 'unknown'
         }
-        onSuccess={refreshCurrentData}
+        onSuccess={async (newDN) => {
+          if (newDN && propertiesItem) {
+            setPropertiesItem({ ...propertiesItem, dn: newDN });
+          }
+          await refreshCurrentData();
+        }}
       />
 
       <CreateOUModal

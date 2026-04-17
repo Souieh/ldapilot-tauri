@@ -88,6 +88,7 @@ export function ObjectProperties({
   const [item, setItem] = useState<any>(null);
   const [currentDN, setCurrentDN] = useState(objectDN);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isMoveOpen, setIsMoveOpen] = useState(false);
   const [allOUs, setAllOUs] = useState<any[]>([]);
@@ -95,12 +96,17 @@ export function ObjectProperties({
   const loadDetails = async (dnToLoad = currentDN) => {
     try {
       setIsLoading(true);
+      setError(null);
       const [detailsRes, ousRes] = await Promise.all([
         fetch(`/api/ldap/objects/details?dn=${encodeURIComponent(dnToLoad)}`),
         fetch('/api/ldap/ous')
       ]);
 
-      if (!detailsRes.ok) throw new Error('Failed to load object details');
+      if (!detailsRes.ok) {
+        const errData = await detailsRes.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to load object details');
+      }
+
       const data = await detailsRes.json();
       setItem(data);
 
@@ -108,17 +114,25 @@ export function ObjectProperties({
         const ous = await ousRes.json();
         setAllOUs(ous);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error('Error loading details');
+      setError(error.message);
+      toast.error(`Error: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadDetails(objectDN);
-    setCurrentDN(objectDN);
+    let isMounted = true;
+    const fetchOnMount = async () => {
+      if (isMounted) {
+        setCurrentDN(objectDN);
+        await loadDetails(objectDN);
+      }
+    };
+    fetchOnMount();
+    return () => { isMounted = false; };
   }, [objectDN]);
 
   const availableTabs = useMemo(
@@ -131,6 +145,24 @@ export function ObjectProperties({
       <div className='flex flex-col items-center justify-center min-h-[400px] bg-card border rounded-xl shadow-sm'>
         <Loader2 className='h-8 w-8 animate-spin text-primary mb-4' />
         <p className='text-muted-foreground text-sm'>Loading details...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className='flex flex-col items-center justify-center min-h-[400px] bg-card border rounded-xl shadow-sm p-8 text-center'>
+        <div className='w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center mb-4'>
+          <Shield className='h-6 w-6 text-destructive' />
+        </div>
+        <h3 className='text-lg font-semibold mb-2'>Connection Error</h3>
+        <p className='text-muted-foreground text-sm max-w-md mb-6'>
+          {error}. This may be due to a temporary connection issue or the object being moved or deleted.
+        </p>
+        <Button onClick={() => loadDetails()} className='gap-2'>
+          <Edit className='h-4 w-4 rotate-180' />
+          Retry Connection
+        </Button>
       </div>
     );
   }
