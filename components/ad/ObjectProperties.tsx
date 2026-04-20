@@ -1,19 +1,19 @@
 'use client';
 
-import React, { FC, useMemo, useState, useEffect } from 'react';
-import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
-import { Edit, Info, Shield, Users, Users2, Loader2, Settings, RotateCcw } from 'lucide-react';
+import { Modal } from '@/components/ui/modal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Edit, Info, Loader2, RotateCcw, Settings, Shield, Users, Users2 } from 'lucide-react';
+import { FC, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { DeleteObjectModal } from './delete-object-modal';
+import { MoveObjectModal } from './move-object-modal';
 import { ObjectMembers } from './object-members';
 import { ObjectParents } from './object-parents';
 import { ObjectPermissions } from './object-permissions';
-import { ObjectInfo } from './ObjectInfo';
-import { ObjectEdit } from './ObjectEdit';
 import { ObjectAccount } from './ObjectAccount';
-import { DeleteObjectModal } from './delete-object-modal';
-import { MoveObjectModal } from './move-object-modal';
-import { toast } from 'sonner';
+import { ObjectEdit } from './ObjectEdit';
+import { ObjectInfo } from './ObjectInfo';
 
 interface GroupObjectsProps {
   objectDN: string;
@@ -61,7 +61,7 @@ const tabs: TabConfig[] = [
     icon: <Users className='h-4 w-4 text-primary' />,
     title: 'Member Of',
     content: ObjectParents,
-    props: { hideContainer: true }
+    props: { hideContainer: true },
   },
   {
     key: 'Members',
@@ -69,7 +69,7 @@ const tabs: TabConfig[] = [
     title: 'Members',
     content: ObjectMembers,
     showFor: ['group'],
-    props: { hideContainer: true }
+    props: { hideContainer: true },
   },
   {
     key: 'Permissions',
@@ -83,7 +83,7 @@ export function ObjectProperties({
   objectDN,
   objectName,
   objectType,
-  onSuccess
+  onSuccess,
 }: GroupObjectsProps & { onSuccess?: (newDN?: string) => void }) {
   const [item, setItem] = useState<any>(null);
   const [currentDN, setCurrentDN] = useState(objectDN);
@@ -97,12 +97,14 @@ export function ObjectProperties({
     try {
       setIsLoading(true);
       setError(null);
+
       const [detailsRes, ousRes] = await Promise.all([
         fetch(`/api/ldap/objects/details?dn=${encodeURIComponent(dnToLoad)}`),
-        fetch('/api/ldap/ous')
+        fetch('/api/ldap/ous'),
       ]);
 
       if (!detailsRes.ok) {
+        console.log('Dn >>>>>>>>>>', dnToLoad);
         const errData = await detailsRes.json().catch(() => ({}));
         throw new Error(errData.error || 'Failed to load object details');
       }
@@ -126,13 +128,15 @@ export function ObjectProperties({
   useEffect(() => {
     let isMounted = true;
     const fetchOnMount = async () => {
-      if (isMounted) {
+      if (isMounted && !!objectDN) {
         setCurrentDN(objectDN);
         await loadDetails(objectDN);
       }
     };
     fetchOnMount();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [objectDN]);
 
   const availableTabs = useMemo(
@@ -157,7 +161,8 @@ export function ObjectProperties({
         </div>
         <h3 className='text-lg font-semibold mb-2'>Connection Error</h3>
         <p className='text-muted-foreground text-sm max-w-md mb-6'>
-          {error}. This may be due to a temporary connection issue or the object being moved or deleted.
+          {error}. This may be due to a temporary connection issue or the object being moved or
+          deleted.
         </p>
         <Button onClick={() => loadDetails()} className='gap-2'>
           <RotateCcw className='h-4 w-4' />
@@ -179,22 +184,22 @@ export function ObjectProperties({
           >
             Delete Object
           </Button>
-          <Button
-            variant='outline'
-            size='sm'
-            onClick={() => setIsMoveOpen(true)}
-          >
+          <Button variant='outline' size='sm' onClick={() => setIsMoveOpen(true)}>
             Move Object
           </Button>
         </div>
       </div>
 
       <div className='min-w-0 bg-card border rounded-xl shadow-sm flex flex-col'>
-        <Tabs defaultValue={availableTabs[0].key} className="flex flex-col">
+        <Tabs defaultValue={availableTabs[0].key} className='flex flex-col'>
           <div className='px-4 pt-4 bg-muted/20 inline-flex sticky top-0 z-20 border-b'>
             <TabsList className='flex-start whitespace-nowrap mb-[-1px]'>
               {availableTabs.map((t) => (
-                <TabsTrigger key={t.key} value={t.key} className='gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent shadow-none'>
+                <TabsTrigger
+                  key={t.key}
+                  value={t.key}
+                  className='gap-2 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent shadow-none'
+                >
                   {t.icon}
                   {t.title}
                 </TabsTrigger>
