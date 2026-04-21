@@ -2,39 +2,11 @@ pub mod models;
 pub mod ldap_handler;
 pub mod config_handler;
 
-use models::{ConfigProfile, Session, AdUser, LdapConfig};
+use models::{ConfigProfile, Session, AdObject, LdapConfig, DnsRecord, DashboardStats, Stats};
 use ldap_handler::LdapHandler;
 use config_handler::{AppState, ConfigHandler};
 use tauri::{AppHandle, State};
 use std::sync::Mutex;
-use serde::Serialize;
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DnsRecord {
-    pub id: String,
-    pub zone: String,
-    pub name: String,
-    pub r#type: String,
-    pub data: String,
-    pub ttl: Option<u32>,
-    pub priority: Option<u16>,
-    pub created: Option<String>,
-    pub modified: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct DashboardStats {
-    pub stats: Stats,
-    pub profile: LdapConfig,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Stats {
-    pub users: usize,
-    pub groups: usize,
-    pub computers: usize,
-}
 
 #[tauri::command]
 async fn create_profile(
@@ -112,9 +84,14 @@ async fn test_connection(
     port: u16,
     protocol: String,
     domain: String,
+    #[serde(rename = "baseDN")]
     base_dn: String,
     username: String,
     password: String,
+    #[serde(rename = "disableTlsVerification")]
+    disable_tls_verification: bool,
+    #[serde(rename = "caCert")]
+    ca_cert: Option<String>,
 ) -> Result<(), String> {
     let config = models::LdapConfig {
         id: "test".to_string(),
@@ -126,8 +103,8 @@ async fn test_connection(
         base_dn,
         created: "".to_string(),
         modified: "".to_string(),
-        disable_tls_verification: true,
-        ca: None,
+        disable_tls_verification,
+        ca: ca_cert,
     };
 
     let upn = if username.contains('@') {
@@ -175,7 +152,7 @@ async fn login(
     profile_id: String,
     username: String,
     password: String,
-) -> Result<AdUser, String> {
+) -> Result<AdObject, String> {
     let profiles = ConfigHandler::get_profiles(&app);
     let profile = profiles.iter().find(|p| p.id == profile_id)
         .ok_or_else(|| "Profile not found".to_string())?;
@@ -188,7 +165,7 @@ async fn login(
 
     LdapHandler::bind(&profile.config, &upn, &password).await?;
 
-    let users = LdapHandler::search_users(
+    let objects = LdapHandler::search_objects(
         &profile.config,
         &upn,
         &password,
@@ -197,7 +174,7 @@ async fn login(
         &format!("(sAMAccountName={})", username)
     ).await?;
 
-    let user = users.get(0).ok_or_else(|| "User not found after bind".to_string())?.clone();
+    let user = objects.get(0).ok_or_else(|| "User not found after bind".to_string())?.clone();
 
     let mut session_guard = state.session.lock().unwrap();
     *session_guard = Some(Session {
@@ -224,7 +201,7 @@ async fn ldap_search(
     object_type: String,
     query: Option<String>,
     scope: Option<String>,
-) -> Result<Vec<AdUser>, String> {
+) -> Result<Vec<AdObject>, String> {
     let session_guard = state.session.lock().unwrap();
     let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
 
@@ -232,11 +209,16 @@ async fn ldap_search(
     let profile = profiles.iter().find(|p| p.id == session.profile_id)
         .ok_or_else(|| "Profile not found".to_string())?;
 
-    let filter = match object_type.as_str() {
-        "user" => format!("(&(objectClass=user)(objectCategory=person){})", query.as_deref().unwrap_or_default()),
-        "group" => format!("(&(objectClass=group){})", query.as_deref().unwrap_or_default()),
-        "computer" => format!("(&(objectClass=computer){})", query.as_deref().unwrap_or_default()),
-        "ou" => format!("(&(objectClass=organizationalUnit){})", query.as_deref().unwrap_or_default()),
+    let filter = match (object_type.as_str(), query.as_deref()) {
+        ("user", Some(q)) if !q.is_empty() => format!("(&(objectClass=user)(objectCategory=person)(|(cn=*{0}*)(sAMAccountName=*{0}*)(mail=*{0}*)(displayName=*{0}*)))", q),
+        ("user", _) => "(&(objectClass=user)(objectCategory=person))".to_string(),
+        ("group", Some(q)) if !q.is_empty() => format!("(&(objectClass=group)(|(cn=*{0}*)(sAMAccountName=*{0}*)))", q),
+        ("group", _) => "(objectClass=group)".to_string(),
+        ("computer", Some(q)) if !q.is_empty() => format!("(&(objectClass=computer)(|(cn=*{0}*)(sAMAccountName=*{0}*)))", q),
+        ("computer", _) => "(objectClass=computer)".to_string(),
+        ("ou", Some(q)) if !q.is_empty() => format!("(&(objectClass=organizationalUnit)(|(ou=*{0}*)(name=*{0}*)))", q),
+        ("ou", _) => "(objectClass=organizationalUnit)".to_string(),
+        (_, Some(q)) if !q.is_empty() => format!("(|(cn=*{0}*)(sAMAccountName=*{0}*)(ou=*{0}*))", q),
         _ => "(objectClass=*)".to_string(),
     };
 
@@ -247,7 +229,7 @@ async fn ldap_search(
         _ => ldap3::Scope::Subtree,
     };
 
-    LdapHandler::search_users(
+    LdapHandler::search_objects(
         &profile.config,
         &session.user_dn,
         &session.password,
@@ -294,6 +276,12 @@ async fn ldap_update(
             let rdn = dn.split(',').next().ok_or("Invalid DN")?;
             let new_dn = format!("{},{}", rdn, new_ou);
             Ok(serde_json::json!({ "newDN": new_dn }))
+        },
+        "toggle-member" => {
+            let member_dn = payload.get("memberDN").and_then(|v| v.as_str()).ok_or("Missing memberDN")?;
+            let action_type = payload.get("type").and_then(|v| v.as_str()).ok_or("Missing type")?;
+            LdapHandler::toggle_group_member(&profile.config, &session.user_dn, &session.password, &dn, member_dn, action_type).await?;
+            Ok(serde_json::json!({ "success": true }))
         },
         _ => Err(format!("Unsupported action: {}", action)),
     }
@@ -378,9 +366,9 @@ async fn get_dashboard_stats(
     let profile = profiles.iter().find(|p| p.id == session.profile_id)
         .ok_or_else(|| "Profile not found".to_string())?;
 
-    let users = LdapHandler::search_users(&profile.config, &session.user_dn, &session.password, &profile.config.base_dn, ldap3::Scope::Subtree, "(objectClass=user)").await?.len();
-    let groups = LdapHandler::search_users(&profile.config, &session.user_dn, &session.password, &profile.config.base_dn, ldap3::Scope::Subtree, "(objectClass=group)").await?.len();
-    let computers = LdapHandler::search_users(&profile.config, &session.user_dn, &session.password, &profile.config.base_dn, ldap3::Scope::Subtree, "(objectClass=computer)").await?.len();
+    let users = LdapHandler::search_objects(&profile.config, &session.user_dn, &session.password, &profile.config.base_dn, ldap3::Scope::Subtree, "(objectClass=user)").await?.len();
+    let groups = LdapHandler::search_objects(&profile.config, &session.user_dn, &session.password, &profile.config.base_dn, ldap3::Scope::Subtree, "(objectClass=group)").await?.len();
+    let computers = LdapHandler::search_objects(&profile.config, &session.user_dn, &session.password, &profile.config.base_dn, ldap3::Scope::Subtree, "(objectClass=computer)").await?.len();
 
     Ok(DashboardStats {
         stats: Stats {
@@ -394,12 +382,23 @@ async fn get_dashboard_stats(
 
 #[tauri::command]
 async fn get_dns_records(
+    app: AppHandle,
+    state: State<'_, AppState>,
 ) -> Result<Vec<DnsRecord>, String> {
+    let session_guard = state.session.lock().unwrap();
+    let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
+
+    let profiles = ConfigHandler::get_profiles(&app);
+    let profile = profiles.iter().find(|p| p.id == session.profile_id)
+        .ok_or_else(|| "Profile not found".to_string())?;
+
     Ok(Vec::new())
 }
 
 #[tauri::command]
 async fn create_dns_record(
+    app: AppHandle,
+    state: State<'_, AppState>,
     payload: serde_json::Value,
 ) -> Result<(), String> {
     Ok(())
@@ -407,6 +406,8 @@ async fn create_dns_record(
 
 #[tauri::command]
 async fn update_dns_record(
+    app: AppHandle,
+    state: State<'_, AppState>,
     payload: serde_json::Value,
 ) -> Result<(), String> {
     Ok(())
@@ -414,6 +415,8 @@ async fn update_dns_record(
 
 #[tauri::command]
 async fn delete_dns_record(
+    app: AppHandle,
+    state: State<'_, AppState>,
     id: String,
 ) -> Result<(), String> {
     Ok(())
@@ -421,19 +424,71 @@ async fn delete_dns_record(
 
 #[tauri::command]
 async fn get_group_members(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    object_dn: String,
 ) -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!([]))
+    let session_guard = state.session.lock().unwrap();
+    let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
+
+    let profiles = ConfigHandler::get_profiles(&app);
+    let profile = profiles.iter().find(|p| p.id == session.profile_id)
+        .ok_or_else(|| "Profile not found".to_string())?;
+
+    let objects = LdapHandler::search_objects(&profile.config, &session.user_dn, &session.password, &object_dn, ldap3::Scope::Base, "(objectClass=group)").await?;
+    let group = objects.get(0).ok_or("Group not found")?;
+
+    let mut members = Vec::new();
+    if let Some(dns) = &group.member {
+        if !dns.is_empty() {
+            let filter = format!("(|{})", dns.iter().map(|dn| format!("(distinguishedName={})", dn)).collect::<Vec<_>>().join(""));
+            members = LdapHandler::search_objects(&profile.config, &session.user_dn, &session.password, &profile.config.base_dn, ldap3::Scope::Subtree, &filter).await?;
+        }
+    }
+
+    Ok(serde_json::json!(members))
 }
 
 #[tauri::command]
 async fn get_object_parents(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    object_dn: String,
 ) -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!([]))
+    let session_guard = state.session.lock().unwrap();
+    let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
+
+    let profiles = ConfigHandler::get_profiles(&app);
+    let profile = profiles.iter().find(|p| p.id == session.profile_id)
+        .ok_or_else(|| "Profile not found".to_string())?;
+
+    let objects = LdapHandler::search_objects(&profile.config, &session.user_dn, &session.password, &object_dn, ldap3::Scope::Base, "(objectClass=*)").await?;
+    let obj = objects.get(0).ok_or("Object not found")?;
+
+    let mut parents = Vec::new();
+    if let Some(dns) = &obj.member_of {
+        if !dns.is_empty() {
+            let filter = format!("(|{})", dns.iter().map(|dn| format!("(distinguishedName={})", dn)).collect::<Vec<_>>().join(""));
+            parents = LdapHandler::search_objects(&profile.config, &session.user_dn, &session.password, &profile.config.base_dn, ldap3::Scope::Subtree, &filter).await?;
+        }
+    }
+
+    Ok(serde_json::json!(parents))
 }
 
 #[tauri::command]
 async fn get_object_permissions(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    object_dn: String,
 ) -> Result<serde_json::Value, String> {
+    let session_guard = state.session.lock().unwrap();
+    let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
+
+    let profiles = ConfigHandler::get_profiles(&app);
+    let profile = profiles.iter().find(|p| p.id == session.profile_id)
+        .ok_or_else(|| "Profile not found".to_string())?;
+
     Ok(serde_json::json!([]))
 }
 

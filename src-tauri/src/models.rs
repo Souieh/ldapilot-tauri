@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -27,7 +28,7 @@ pub struct ConfigProfile {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct AdUser {
+pub struct AdObject {
     pub dn: String,
     pub object_class: Vec<String>,
     pub cn: String,
@@ -41,48 +42,16 @@ pub struct AdUser {
     pub last_logon_timestamp: Option<String>,
     pub when_created: Option<String>,
     pub when_changed: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct AdComputer {
-    pub dn: String,
-    pub object_class: Vec<String>,
-    pub cn: String,
-    pub s_am_account_name: String,
+    // Group fields
+    pub member: Option<Vec<String>>,
+    pub member_of: Option<Vec<String>>,
+    pub description: Option<String>,
+    // Computer fields
     pub d_ns_host_name: Option<String>,
     pub operating_system: Option<String>,
     pub operating_system_version: Option<String>,
-    pub user_account_control: Option<u32>,
-    pub when_created: Option<String>,
-    pub when_changed: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct AdGroup {
-    pub dn: String,
-    pub object_class: Vec<String>,
-    pub cn: String,
-    pub s_am_account_name: String,
-    pub mail: Option<String>,
-    pub description: Option<String>,
-    pub member: Vec<String>,
-    pub member_of: Vec<String>,
-    pub when_created: Option<String>,
-    pub when_changed: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct AdOu {
-    pub dn: String,
-    pub object_class: Vec<String>,
-    pub ou: String,
-    pub cn: String,
-    pub description: Option<String>,
-    pub when_created: Option<String>,
-    pub when_changed: Option<String>,
+    // OU fields
+    pub ou: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -94,11 +63,29 @@ pub struct Session {
     pub password: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DnsRecord {
+    pub id: String,
+    pub zone: String,
+    pub name: String,
+    pub r#type: String,
+    pub data: String,
+    pub ttl: Option<u32>,
+    pub priority: Option<u16>,
+    pub created: Option<String>,
+    pub modified: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
-#[serde(untagged)]
-pub enum AdObject {
-    User(AdUser),
-    Group(AdGroup),
-    Computer(AdComputer),
-    Ou(AdOu),
+pub struct DashboardStats {
+    pub stats: Stats,
+    pub profile: LdapConfig,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Stats {
+    pub users: usize,
+    pub groups: usize,
+    pub computers: usize,
 }

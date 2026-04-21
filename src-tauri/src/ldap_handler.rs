@@ -1,4 +1,4 @@
-use crate::models::{AdComputer, AdGroup, AdOu, AdUser, LdapConfig};
+use crate::models::{AdObject, LdapConfig};
 use ldap3::{Ldap, LdapConnAsync, LdapError, Scope, SearchEntry, Mod, Entry, LdapConnSettings};
 use std::collections::HashMap;
 
@@ -11,8 +11,7 @@ impl LdapHandler {
 
         // Handling TLS verification
         if config.protocol == "ldaps" && config.disable_tls_verification {
-            // settings = settings.set_no_certificate_verification(true);
-            // Note: ldap3 settings API might vary by version, for now we assume default.
+            settings = settings.set_no_certificate_verification(true);
         }
 
         let (conn, ldap) = LdapConnAsync::with_settings(settings, &url).await?;
@@ -43,14 +42,14 @@ impl LdapHandler {
         Self::get_attr(attrs, name).and_then(|v| v.get(0).cloned())
     }
 
-    pub async fn search_users(
+    pub async fn search_objects(
         config: &LdapConfig,
         user_dn: &str,
         password: &str,
         base_dn: &str,
         scope: Scope,
         filter: &str,
-    ) -> Result<Vec<AdUser>, String> {
+    ) -> Result<Vec<AdObject>, String> {
         let mut ldap = Self::get_ldap_conn(config).await.map_err(|e| e.to_string())?;
         ldap.simple_bind(user_dn, password)
             .await
@@ -61,9 +60,9 @@ impl LdapHandler {
             .await
             .map_err(|e| e.to_string())?;
 
-        let users = rs.into_iter().map(|entry| {
+        let objects = rs.into_iter().map(|entry| {
             let search_entry = SearchEntry::construct(entry);
-            AdUser {
+            AdObject {
                 dn: search_entry.dn.clone(),
                 object_class: Self::get_attr(&search_entry.attrs, "objectClass").unwrap_or_default(),
                 cn: Self::get_attr_single(&search_entry.attrs, "cn").unwrap_or_default(),
@@ -77,11 +76,18 @@ impl LdapHandler {
                 last_logon_timestamp: Self::get_attr_single(&search_entry.attrs, "lastLogonTimestamp"),
                 when_created: Self::get_attr_single(&search_entry.attrs, "whenCreated"),
                 when_changed: Self::get_attr_single(&search_entry.attrs, "whenChanged"),
+                member: Self::get_attr(&search_entry.attrs, "member"),
+                member_of: Self::get_attr(&search_entry.attrs, "memberOf"),
+                description: Self::get_attr_single(&search_entry.attrs, "description"),
+                d_ns_host_name: Self::get_attr_single(&search_entry.attrs, "dNSHostName"),
+                operating_system: Self::get_attr_single(&search_entry.attrs, "operatingSystem"),
+                operating_system_version: Self::get_attr_single(&search_entry.attrs, "operatingSystemVersion"),
+                ou: Self::get_attr_single(&search_entry.attrs, "ou"),
             }
         }).collect();
 
         ldap.unbind().await.map_err(|e| e.to_string())?;
-        Ok(users)
+        Ok(objects)
     }
 
     pub async fn update_password(
@@ -317,6 +323,31 @@ impl LdapHandler {
             .map_err(|e| e.to_string())?;
 
         ldap.delete(ou_dn).await.map_err(|e| e.to_string())?;
+
+        ldap.unbind().await.map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub async fn toggle_group_member(
+        config: &LdapConfig,
+        user_dn: &str,
+        password: &str,
+        group_dn: &str,
+        member_dn: &str,
+        action: &str,
+    ) -> Result<(), String> {
+        let mut ldap = Self::get_ldap_conn(config).await.map_err(|e| e.to_string())?;
+        ldap.simple_bind(user_dn, password)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let mods = match action {
+            "add" => vec![Mod::Add("member".to_string(), vec![member_dn.to_string()])],
+            "delete" => vec![Mod::Delete("member".to_string(), vec![member_dn.to_string()])],
+            _ => return Err(format!("Unsupported action: {}", action)),
+        };
+
+        ldap.modify(group_dn, mods).await.map_err(|e| e.to_string())?;
 
         ldap.unbind().await.map_err(|e| e.to_string())?;
         Ok(())

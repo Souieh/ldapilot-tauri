@@ -1,11 +1,25 @@
-import { getSession } from '@/lib/server/session-store';
-import { redirect } from 'next/navigation';
+'use client';
 
-/**
- * Prevents authenticated users from accessing login/setup pages
- */
-export async function GuestGuard({ children }: { children: React.ReactNode }) {
-  const session = await getSession();
-  if (!!session) redirect('/dashboard');
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { getSession } from '@/lib/backend-api';
+
+export function GuestGuard({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const [isGuest, setIsGuest] = useState(false);
+
+  useEffect(() => {
+    const check = async () => {
+      const session = await getSession();
+      if (session?.authenticated) {
+        router.push('/dashboard');
+      } else {
+        setIsGuest(true);
+      }
+    };
+    check();
+  }, [router]);
+
+  if (!isGuest) return null;
   return <>{children}</>;
 }
