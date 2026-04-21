@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/modal';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { AlertTriangle } from 'lucide-react';
+import { deleteObject } from '@/lib/backend-api';
 
 interface DeleteObjectModalProps {
   isOpen: boolean;
@@ -22,20 +23,7 @@ export function DeleteObjectModal({ isOpen, onClose, dn, name, type, onSuccess }
   const handleDelete = async () => {
     try {
       setIsSubmitting(true);
-      const password = sessionStorage.getItem('ldap-password') || '';
-      const res = await fetch('/api/ldap/objects', {
-        method: 'DELETE',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-ldap-password': password 
-        },
-        body: JSON.stringify({ dn, type }),
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || `Failed to delete ${type}`);
-      }
+      await deleteObject(dn);
 
       toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully`);
       await onSuccess();

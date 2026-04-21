@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Edit, Info, Loader2, RotateCcw, Settings, Shield, Users, Users2 } from 'lucide-react';
 import { FC, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { getOUs, getObjectDetails } from '@/lib/backend-api';
 import { DeleteObjectModal } from './delete-object-modal';
 import { MoveObjectModal } from './move-object-modal';
 import { ObjectMembers } from './object-members';
@@ -98,24 +99,13 @@ export function ObjectProperties({
       setIsLoading(true);
       setError(null);
 
-      const [detailsRes, ousRes] = await Promise.all([
-        fetch(`/api/ldap/objects/details?dn=${encodeURIComponent(dnToLoad)}`),
-        fetch('/api/ldap/ous'),
+      const [data, ous] = await Promise.all([
+        getObjectDetails(dnToLoad),
+        getOUs(),
       ]);
 
-      if (!detailsRes.ok) {
-        console.log('Dn >>>>>>>>>>', dnToLoad);
-        const errData = await detailsRes.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to load object details');
-      }
-
-      const data = await detailsRes.json();
       setItem(data);
-
-      if (ousRes.ok) {
-        const ous = await ousRes.json();
-        setAllOUs(ous);
-      }
+      setAllOUs(ous);
     } catch (error: any) {
       console.error(error);
       setError(error.message);

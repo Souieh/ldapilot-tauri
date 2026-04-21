@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Pagination } from '@/components/ui/pagination';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { toast } from 'sonner';
+import { createDnsRecord, deleteDnsRecord, getDnsRecords, updateDnsRecord } from '@/lib/backend-api';
 import { UI_LABELS } from '@/lib/constants/ui-labels';
 import {
   DNS_RECORD_TYPES,
@@ -147,17 +148,9 @@ export default function DNSManagerPage() {
   const loadRecords = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('/api/ldap/dns');
-      if (res.ok) {
-        const data = await res.json();
-        setRecords(data);
-      } else if (res.status === 401) {
-        toast.error('Session expired or unauthorized');
-        router.push('/login');
-      } else {
-        toast.error('Failed to load DNS records');
-      }
-    } catch (error) {
+      const data = await getDnsRecords();
+      setRecords(data);
+    } catch (error: any) {
       toast.error('Error connecting to server');
       console.error(error);
     } finally {
@@ -210,31 +203,16 @@ export default function DNSManagerPage() {
         priority: formValues.priority ? parseInt(formValues.priority) : undefined,
       };
 
-      let res;
       if (editingRecord) {
-        res = await fetch(`/api/ldap/dns`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' ,  },
-          
-          body: JSON.stringify(payload),
-        });
+        await updateDnsRecord(payload);
       } else {
-        res = await fetch('/api/ldap/dns', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
+        await createDnsRecord(payload);
       }
 
-      if (res.ok) {
-        toast.success(UI_LABELS.messages.saved);
-        setShowModal(false);
-        loadRecords();
-      } else { 
-         
-        toast.error(  'Failed to save record');
-      }
-    } catch (error) {
+      toast.success(UI_LABELS.messages.saved);
+      setShowModal(false);
+      loadRecords();
+    } catch (error: any) {
       toast.error('Error saving record');
       console.error(error);
     }
@@ -242,13 +220,11 @@ export default function DNSManagerPage() {
 
   const handleDeleteRecord = async (record: DNSRecord) => {
     if (confirm(`Delete ${record.name}.${record.zone} ${record.type} record?`)) {
-      const res = await fetch(`/api/ldap/dns/${record.id}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
+      try {
+        await deleteDnsRecord(record.id);
         toast.success(UI_LABELS.messages.deleted);
         loadRecords();
-      } else {
+      } catch (error) {
         toast.error('Failed to delete record');
       }
     }

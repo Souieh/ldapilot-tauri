@@ -3,6 +3,7 @@
 import { Info, Loader2, Shield, ShieldCheck, Plus, Trash2, Edit2, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { getObjectPermissions } from '@/lib/backend-api';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Modal } from '../ui/modal';
@@ -50,9 +51,7 @@ export function ObjectPermissions({ objectDN }: ObjectPermissionsProps) {
   const loadPermissions = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/ldap/objects/permissions?dn=${encodeURIComponent(objectDN)}`);
-      if (!res.ok) throw new Error('Failed to load permissions');
-      const data = await res.json();
+      const data = await getObjectPermissions(objectDN);
       setPermissions(data);
     } catch (error) {
       console.error(error);

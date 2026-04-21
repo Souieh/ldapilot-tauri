@@ -7,6 +7,7 @@ import { Loader2, Mail, Monitor, Plus, Shield, User, Users2, X, Search, Trash2 }
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getGroupMembers, ldapSearch, ldapUpdate } from '@/lib/backend-api';
 
 interface Member {
   dn: string;
@@ -55,14 +56,7 @@ export function ObjectMembers({ objectDN, objectName, onSuccess, hideContainer =
   const loadMembers = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('/api/ldap/objects/members', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ objectDN }),
-      });
-
-      if (!res.ok) throw new Error('Failed to load group members');
-      const data = await res.json();
+      const data = await getGroupMembers(objectDN);
       setMembers(data);
     } catch (error) {
       console.error(error);
@@ -75,24 +69,11 @@ export function ObjectMembers({ objectDN, objectName, onSuccess, hideContainer =
   const handleToggleMember = async (memberDN: string, action: 'add' | 'delete', memberType: string) => {
     try {
       setIsSubmitting(true);
-      const res = await fetch('/api/ldap/objects', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          dn: objectDN,
-          action: 'toggle-member',
-          payload: {
-            groupDN: objectDN,
-            memberDN,
-            type: action,
-          },
-        }),
+      await ldapUpdate(objectDN, 'toggle-member', {
+        groupDN: objectDN,
+        memberDN,
+        type: action,
       });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || `Failed to ${action === 'add' ? 'add' : 'remove'} member`);
-      }
 
       toast.success(action === 'add' ? 'Member added successfully' : 'Member removed successfully');
       loadMembers();
@@ -113,19 +94,12 @@ export function ObjectMembers({ objectDN, objectName, onSuccess, hideContainer =
     if (!memberSearchQuery.trim()) return;
     try {
       setIsSearching(true);
-      const res = await fetch('/api/ldap/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ouDN: 'ROOT',
-          objectType: memberTypeFilter,
-          scope: 'sub',
-          query: memberSearchQuery
-        }),
-      });
-
-      if (!res.ok) throw new Error('Search failed');
-      const data = await res.json();
+      const data = await ldapSearch(
+        'ROOT',
+        memberTypeFilter,
+        memberSearchQuery,
+        'sub'
+      );
 
       const existingDNs = new Set(members.map(m => m.dn));
       const results = data

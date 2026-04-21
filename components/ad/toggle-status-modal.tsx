@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Modal } from '@/components/ui/modal';
 import { toast } from 'sonner';
 import { AlertCircle, UserCheck, UserX } from 'lucide-react';
+import { ldapUpdate } from '@/lib/backend-api';
 
 interface ToggleStatusModalProps {
   isOpen: boolean;
@@ -29,22 +30,7 @@ export function ToggleStatusModal({
   const handleToggle = async () => {
     try {
       setIsSubmitting(true);
-      const res = await fetch('/api/ldap/objects', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          dn,
-          action: 'toggle-status',
-          payload: { enabled: !enabled },
-        }),
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || `Failed to ${enabled ? 'disable' : 'enable'} ${type}`);
-      }
+      await ldapUpdate(dn, 'toggle-status', { enabled: !enabled });
 
       toast.success(`${type} ${enabled ? 'disabled' : 'enabled'} successfully`);
       await onSuccess();

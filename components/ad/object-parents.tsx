@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/modal';
 import { Loader2, Plus, Shield, Trash2, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { getObjectParents, ldapSearch, ldapUpdate } from '@/lib/backend-api';
 
 interface Parent {
   dn: string;
@@ -52,14 +53,7 @@ export function ObjectParents({ objectDN, objectName, onSuccess, hideContainer =
   const loadParents = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('/api/ldap/objects/parents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ objectDN }),
-      });
-
-      if (!res.ok) throw new Error('Failed to load group parents');
-      const data = await res.json();
+      const data = await getObjectParents(objectDN);
       setParents(data);
     } catch (error) {
       console.error(error);
@@ -72,24 +66,11 @@ export function ObjectParents({ objectDN, objectName, onSuccess, hideContainer =
   const handleToggleMember = async (groupDN: string, action: 'add' | 'delete') => {
     try {
       setIsSubmitting(true);
-      const res = await fetch('/api/ldap/objects', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          dn: objectDN,
-          action: 'toggle-member',
-          payload: {
-            groupDN,
-            memberDN: objectDN,
-            type: action,
-          },
-        }),
+      await ldapUpdate(objectDN, 'toggle-member', {
+        groupDN,
+        memberDN: objectDN,
+        type: action,
       });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || `Failed to ${action === 'add' ? 'join' : 'leave'} group`);
-      }
 
       toast.success(action === 'add' ? 'Joined group successfully' : 'Left group successfully');
       loadParents();
@@ -110,19 +91,12 @@ export function ObjectParents({ objectDN, objectName, onSuccess, hideContainer =
     if (!groupSearchQuery.trim()) return;
     try {
       setIsSearching(true);
-      const res = await fetch('/api/ldap/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ouDN: 'ROOT',
-          objectType: 'group',
-          scope: 'sub',
-          query: groupSearchQuery
-        }),
-      });
-
-      if (!res.ok) throw new Error('Search failed');
-      const data = await res.json();
+      const data = await ldapSearch(
+        'ROOT',
+        'group',
+        groupSearchQuery,
+        'sub'
+      );
 
       // Exclude groups already joined
       const existingDNs = new Set(parents.map(p => p.dn));

@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { ChevronRight, Home, Monitor, Plus, Users, Users2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { createObject, getOUs, ldapSearch, ldapUpdate } from '@/lib/backend-api';
 
 type ObjectType = 'user' | 'computer' | 'group';
 
@@ -71,15 +72,9 @@ export default function ADManagementPage() {
   const loadOUs = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('/api/ldap/ous');
-      if (!res.ok) {
-        const error = await res.json();
-        toast.error(error.error || 'Failed to load OUs');
-        return;
-      }
-      const data = await res.json();
+      const data = await getOUs();
       setOus(data);
-    } catch (error) {
+    } catch (error: any) {
       toast.error('Error loading OUs');
       console.error(error);
     } finally {
@@ -98,29 +93,19 @@ export default function ADManagementPage() {
 
     try {
       setIsLoading(true);
-      const res = await fetch('/api/ldap/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ouDN,
-          objectType,
-          scope: ouDN === 'ROOT' ? 'sub' : 'one',
-        }),
-      });
+      const data = await ldapSearch(
+        ouDN,
+        objectType,
+        undefined,
+        ouDN === 'ROOT' ? 'sub' : 'one'
+      );
 
-      if (!res.ok) {
-        const error = await res.json();
-        toast.error(error.error || `Failed to search ${objectType}s`);
-        return;
-      }
-
-      const data = await res.json();
       switch (objectType) {
         case 'user': setUsers(data); break;
         case 'computer': setComputers(data); break;
         case 'group': setGroups(data); break;
       }
-    } catch (error) {
+    } catch (error: any) {
       toast.error(`Error loading ${objectType}s`);
       console.error(error);
     } finally {
@@ -161,29 +146,19 @@ export default function ADManagementPage() {
     if (selectedOuDN) {
       try {
         setIsLoading(true);
-        const res = await fetch('/api/ldap/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ouDN: selectedOuDN,
-            objectType: type,
-            scope: selectedOuDN === 'ROOT' ? 'sub' : 'one',
-          }),
-        });
+        const data = await ldapSearch(
+          selectedOuDN,
+          type,
+          undefined,
+          selectedOuDN === 'ROOT' ? 'sub' : 'one'
+        );
 
-        if (!res.ok) {
-          const error = await res.json();
-          toast.error(error.error || `Failed to search ${type}s`);
-          return;
-        }
-
-        const data = await res.json();
         switch (type) {
           case 'user': setUsers(data); break;
           case 'computer': setComputers(data); break;
           case 'group': setGroups(data); break;
         }
-      } catch (error) {
+      } catch (error: any) {
         toast.error(`Error loading ${type}s`);
         console.error(error);
       } finally {
@@ -205,30 +180,12 @@ export default function ADManagementPage() {
 
   const handleFormSubmit = async (values: Record<string, any>) => {
     if (!formType) return;
-    const method = isEditMode ? 'PATCH' : 'POST';
-    const action = isEditMode ? 'update' : undefined;
 
     try {
-      const password = sessionStorage.getItem('ldap-password') || '';
-      const res = await fetch('/api/ldap/objects', {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'x-ldap-password': password,
-        },
-        body: JSON.stringify({
-          ouDN: selectedOuDN,
-          objectType: formType,
-          dn: selectedItem?.dn,
-          action,
-          payload: isEditMode ? { attributes: values } : undefined,
-          attributes: !isEditMode ? values : undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || `Failed to ${isEditMode ? 'update' : 'create'} ${formType}`);
+      if (isEditMode) {
+        await ldapUpdate(selectedItem?.dn, 'update', { attributes: values });
+      } else {
+        await createObject(selectedOuDN, formType, values);
       }
 
       toast.success(`${formType} ${isEditMode ? 'updated' : 'created'} successfully`);

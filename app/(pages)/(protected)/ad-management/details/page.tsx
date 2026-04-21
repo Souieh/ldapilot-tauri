@@ -20,6 +20,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { getGroupMembers, getObjectDetails } from '@/lib/backend-api';
 
 function DetailsContent() {
   const searchParams = useSearchParams();
@@ -40,9 +41,7 @@ function DetailsContent() {
   const loadDetails = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/ldap/objects/details?dn=${encodeURIComponent(dn!)}`);
-      if (!res.ok) throw new Error('Failed to load object details');
-      const data = await res.json();
+      const data = await getObjectDetails(dn!);
       setItem(data);
 
       // If it's a group, load members
@@ -60,15 +59,8 @@ function DetailsContent() {
   const loadGroupMembers = async (groupDN: string) => {
     try {
       setIsLoadingMembers(true);
-      const res = await fetch('/api/ldap/groups/members', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ groupDN }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMembers(data);
-      }
+      const data = await getGroupMembers(groupDN);
+      setMembers(data);
     } catch (error) {
       console.error(error);
     } finally {

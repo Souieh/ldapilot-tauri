@@ -5,6 +5,7 @@ import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Users, Shield, Monitor, Activity, Server, Database, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getDashboardStats } from '@/lib/backend-api';
 
 export default function DashboardPage() {
   const [data, setData] = useState<any>(null);
@@ -13,13 +14,8 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const res = await fetch('/api/ldap/dashboard');
-        if (!res.ok) {
-          const error = await res.json();
-          throw new Error(error.error || 'Failed to fetch dashboard data');
-        }
-        const json = await res.json();
-        setData(json);
+        const data = await getDashboardStats();
+        setData(data);
       } catch (error: any) {
         toast.error(error.message);
       } finally {

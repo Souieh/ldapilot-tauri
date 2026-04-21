@@ -5,6 +5,7 @@ import { userFields } from '@/components/ad/ad-user-form';
 import { DynamicForm, FormField } from '@/components/forms/dynamic-form';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { ldapUpdate } from '@/lib/backend-api';
 
 interface ObjectEditProps {
   item: any;
@@ -35,22 +36,7 @@ export function ObjectEdit({ item, onSuccess, group }: ObjectEditProps) {
   const handleSubmit = async (formValues: Record<string, any>) => {
     try {
       setIsSubmitting(true);
-      const res = await fetch('/api/ldap/objects', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          dn: item.dn,
-          action: 'update',
-          payload: {
-            attributes: formValues,
-          },
-        }),
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to update object');
-      }
+      await ldapUpdate(item.dn, 'update', { attributes: formValues });
 
       toast.success('Object updated successfully');
       if (onSuccess) onSuccess();

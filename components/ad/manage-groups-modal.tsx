@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { Trash2, Shield, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ldapUpdate } from '@/lib/backend-api';
 
 interface ManageGroupsModalProps {
   isOpen: boolean;
@@ -31,23 +32,11 @@ export function ManageGroupsModal({
   const handleRemoveMember = async (groupDN: string) => {
     try {
       setIsSubmitting(true);
-      const res = await fetch('/api/ldap/objects', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'toggle-member',
-          payload: {
-            groupDN,
-            memberDN: objectDN,
-            type: 'delete',
-          },
-        }),
+      await ldapUpdate(objectDN, 'toggle-member', {
+        groupDN,
+        memberDN: objectDN,
+        type: 'delete',
       });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to remove group membership');
-      }
 
       toast.success('Removed from group');
       await onSuccess();

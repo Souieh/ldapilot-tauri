@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { ADOU } from '@/lib/types/config';
 import { toast } from 'sonner';
+import { createOU } from '@/lib/backend-api';
 
 const ILLEGAL_OU_CHARS = /[,\\#+<>;\"=]/;
 const MAX_OU_LENGTH = 64;
@@ -88,16 +89,7 @@ export function CreateOUModal({ isOpen, onClose, ous, parentOuDN: initialParentD
 
     try {
       setIsSubmitting(true);
-      const res = await fetch('/api/ldap/ous', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parentDN: parentDN || undefined, ouName: trimmedName }),
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to create OU');
-      }
+      await createOU(trimmedName, parentDN || undefined);
 
       toast.success('Organizational unit created');
       await onSuccess();

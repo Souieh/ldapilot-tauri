@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/modal';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { AlertTriangle } from 'lucide-react';
+import { deleteOU } from '@/lib/backend-api';
 
 interface DeleteOUModalProps {
   isOpen: boolean;
@@ -21,16 +22,7 @@ export function DeleteOUModal({ isOpen, onClose, ouDN, ouName, onSuccess }: Dele
   const handleDelete = async () => {
     try {
       setIsSubmitting(true);
-      const res = await fetch('/api/ldap/ous', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ouDN }),
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to delete OU');
-      }
+      await deleteOU(ouDN);
 
       toast.success('Organizational unit deleted');
       await onSuccess();

@@ -10,6 +10,7 @@ import { Check, Plus, Settings, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { createProfile, deleteProfile, getProfiles, setActiveProfile, testConnection, updateProfile } from '@/lib/backend-api';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -27,12 +28,9 @@ export default function SettingsPage() {
   const loadProfiles = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('/api/config/profiles');
-      if (res.ok) {
-        const data = await res.json();
-        setProfiles(data);
-      }
-    } catch (error) {
+      const data = await getProfiles();
+      setProfiles(data);
+    } catch (error: any) {
       toast.error('Failed to load profiles');
       console.error(error);
     } finally {
@@ -79,29 +77,20 @@ export default function SettingsPage() {
       if (!username) return;
       if (!password) return;
 
-      const res = await fetch('/api/ldap/test-connection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          hostname: formValues.hostname,
-          username: username,
-          port: formValues.port,
-          protocol: formValues.protocol,
-          caCert: formValues.caCert,
-          password,
-          domain: formValues.domain,
-          baseDN: formValues.baseDN,
-          disableTlsVerification: formValues.disableTlsVerification,
-        }),
+      await testConnection({
+        hostname: formValues.hostname,
+        username: username,
+        port: formValues.port,
+        protocol: formValues.protocol,
+        caCert: formValues.caCert,
+        password,
+        domain: formValues.domain,
+        baseDN: formValues.baseDN,
+        disableTlsVerification: formValues.disableTlsVerification,
       });
 
-      if (res.ok) {
-        toast.success(UI_LABELS.messages.connectionSuccess);
-      } else {
-        const error = await res.json();
-        toast.error(error.error || UI_LABELS.messages.connectionFailed);
-      }
-    } catch (error) {
+      toast.success(UI_LABELS.messages.connectionSuccess);
+    } catch (error: any) {
       toast.error(UI_LABELS.messages.connectionFailed);
       console.error(error);
     } finally {
@@ -127,35 +116,16 @@ export default function SettingsPage() {
         disableTlsVerification: !!formValues.disableTlsVerification,
       };
 
-      let res;
       if (editingProfile) {
-        res = await fetch(`/api/config/profiles/${editingProfile.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: formValues.name,
-            config,
-          }),
-        });
+        await updateProfile(editingProfile.id, formValues.name, config);
       } else {
-        res = await fetch('/api/config/profiles', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: formValues.name,
-            config,
-          }),
-        });
+        await createProfile(formValues.name, config);
       }
 
-      if (res.ok) {
-        toast.success(UI_LABELS.messages.saved);
-        setShowModal(false);
-        loadProfiles();
-      } else {
-        toast.error('Failed to save profile');
-      }
-    } catch (error) {
+      toast.success(UI_LABELS.messages.saved);
+      setShowModal(false);
+      loadProfiles();
+    } catch (error: any) {
       toast.error('Error saving profile');
       console.error(error);
     }
@@ -163,19 +133,10 @@ export default function SettingsPage() {
 
   const handleSetActive = async (profileId: string) => {
     try {
-      const res = await fetch('/api/config/active', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileId }),
-      });
-
-      if (res.ok) {
-        loadProfiles();
-        toast.success('Profile activated');
-      } else {
-        toast.error('Failed to activate profile');
-      }
-    } catch (error) {
+      await setActiveProfile(profileId);
+      loadProfiles();
+      toast.success('Profile activated');
+    } catch (error: any) {
       toast.error('Error activating profile');
       console.error(error);
     }
@@ -185,17 +146,10 @@ export default function SettingsPage() {
     if (!confirm('Are you sure you want to delete this profile?')) return;
 
     try {
-      const res = await fetch(`/api/config/profiles/${profileId}`, {
-        method: 'DELETE',
-      });
-
-      if (res.ok) {
-        toast.success(UI_LABELS.messages.deleted);
-        loadProfiles();
-      } else {
-        toast.error('Failed to delete profile');
-      }
-    } catch (error) {
+      await deleteProfile(profileId);
+      toast.success(UI_LABELS.messages.deleted);
+      loadProfiles();
+    } catch (error: any) {
       toast.error('Error deleting profile');
       console.error(error);
     }
@@ -203,19 +157,10 @@ export default function SettingsPage() {
 
   const handleSelectProfile = async (profileId: string) => {
     try {
-      const res = await fetch('/api/config/active', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileId }),
-      });
-
-      if (res.ok) {
-        toast.success('Profile selected');
-        router.push('/login');
-      } else {
-        toast.error('Failed to select profile');
-      }
-    } catch (error) {
+      await setActiveProfile(profileId);
+      toast.success('Profile selected');
+      router.push('/login');
+    } catch (error: any) {
       toast.error('Error selecting profile');
       console.error(error);
     }

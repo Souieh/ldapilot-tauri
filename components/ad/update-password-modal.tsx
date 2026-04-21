@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { KeyRound } from 'lucide-react';
+import { ldapUpdate } from '@/lib/backend-api';
 
 interface UpdatePasswordModalProps {
   isOpen: boolean;
@@ -33,27 +34,7 @@ export function UpdatePasswordModal({ isOpen, onClose, dn, name, onSuccess }: Up
 
     try {
       setIsSubmitting(true);
-      const adminPassword = sessionStorage.getItem('ldap-password') || '';
-      
-      const res = await fetch('/api/ldap/objects', {
-        method: 'PATCH',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-ldap-password': adminPassword 
-        },
-        body: JSON.stringify({ 
-          dn, 
-          action: 'password', 
-          payload: {
-            newPassword
-          }
-        }),
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to update password');
-      }
+      await ldapUpdate(dn, 'password', { newPassword });
 
       toast.success(`Password for ${name} updated successfully`);
       await onSuccess();

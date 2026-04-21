@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { ConfigProfile } from '@/lib/types/config';
+import { getProfiles, login } from '@/lib/backend-api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,20 +25,17 @@ export default function LoginPage() {
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const res = await fetch('/api/config/profiles');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.length === 0) {
-            router.push('/setup');
-            return;
-          }
-          setProfiles(data);
-          const active = data.find((p: ConfigProfile) => p.isActive);
-          if (active) {
-            setSelectedProfileId(active.id);
-          } else if (data.length > 0) {
-            setSelectedProfileId(data[0].id);
-          }
+        const data = await getProfiles();
+        if (data.length === 0) {
+          router.push('/setup');
+          return;
+        }
+        setProfiles(data);
+        const active = data.find((p: ConfigProfile) => p.isActive);
+        if (active) {
+          setSelectedProfileId(active.id);
+        } else if (data.length > 0) {
+          setSelectedProfileId(data[0].id);
         }
       } catch (error) {
         toast.error('Failed to load profiles');
@@ -57,26 +55,12 @@ export default function LoginPage() {
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          profileId: selectedProfileId,
-          username,
-          password,
-        }),
-      });
-
-      if (res.ok) {
-        toast.success('Logged in successfully');
-        router.push('/dashboard');
-        router.refresh();
-      } else {
-        const data = await res.json();
-        toast.error(data.error || 'Login failed');
-      }
-    } catch (error) {
-      toast.error('An error occurred during login');
+      await login(selectedProfileId, username, password);
+      toast.success('Logged in successfully');
+      router.push('/dashboard');
+      router.refresh();
+    } catch (error: any) {
+      toast.error(error.message || 'An error occurred during login');
     } finally {
       setIsSubmitting(false);
     }

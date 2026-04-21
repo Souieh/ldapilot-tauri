@@ -8,6 +8,7 @@ import { isAccountEnabled } from '@/lib/constants/ldap-attributes';
 import { AlertCircle, KeyRound, UserCheck, UserX, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { ldapUpdate } from '@/lib/backend-api';
 
 interface ObjectAccountProps {
   item: any;
@@ -27,20 +28,7 @@ export function ObjectAccount({ item, onSuccess }: ObjectAccountProps) {
   const handleToggleStatus = async () => {
     try {
       setIsSubmitting(true);
-      const res = await fetch('/api/ldap/objects', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          dn: item.dn,
-          action: 'toggle-status',
-          payload: { enabled: !enabled },
-        }),
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || `Failed to ${enabled ? 'disable' : 'enable'} account`);
-      }
+      await ldapUpdate(item.dn, 'toggle-status', { enabled: !enabled });
 
       toast.success(`Account ${enabled ? 'disabled' : 'enabled'} successfully`);
       if (onSuccess) onSuccess();
@@ -60,20 +48,7 @@ export function ObjectAccount({ item, onSuccess }: ObjectAccountProps) {
 
     try {
       setIsSubmitting(true);
-      const res = await fetch('/api/ldap/objects', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          dn: item.dn,
-          action: 'password',
-          payload: { newPassword },
-        }),
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || 'Failed to update password');
-      }
+      await ldapUpdate(item.dn, 'password', { newPassword });
 
       toast.success('Password updated successfully');
       setNewPassword('');

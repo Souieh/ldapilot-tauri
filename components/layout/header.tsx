@@ -15,6 +15,7 @@ import { ThemeToggle } from './theme-toggle';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { getSession, logout } from '@/lib/backend-api';
 
 export function Header() {
   const router = useRouter();
@@ -28,11 +29,8 @@ export function Header() {
   useEffect(() => {
     const fetchSession = async () => {
       try {
-        const res = await fetch('/api/auth/session');
-        if (res.ok) {
-          const data = await res.json();
-          setSession(data);
-        }
+        const data = await getSession();
+        setSession(data);
       } catch (error) {
         console.error('Failed to fetch session');
       }
@@ -42,11 +40,9 @@ export function Header() {
 
   const handleLogout = async () => {
     try {
-      const res = await fetch('/api/auth/logout', { method: 'POST' });
-      if (res.ok) {
-        router.push('/login');
-        router.refresh();
-      }
+      await logout();
+      router.push('/login');
+      router.refresh();
     } catch (error) {
       console.error('Logout failed');
     }

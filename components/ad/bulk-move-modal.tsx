@@ -6,6 +6,7 @@ import { ADOU } from '@/lib/types/config';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
+import { ldapUpdate } from '@/lib/backend-api';
 
 interface BulkMoveModalProps {
   isOpen: boolean;
@@ -33,20 +34,8 @@ export function BulkMoveModal({ isOpen, onClose, selectedItems, ous, onSuccess }
 
       for (const item of selectedItems) {
         try {
-          const res = await fetch('/api/ldap/objects', {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-ldap-password': password
-            },
-            body: JSON.stringify({ dn: item.dn, action: 'move', payload: { newOU } }),
-          });
-
-          if (res.ok) {
-            successCount++;
-          } else {
-            errorCount++;
-          }
+          await ldapUpdate(item.dn, 'move', { newOU });
+          successCount++;
         } catch (err) {
           errorCount++;
         }

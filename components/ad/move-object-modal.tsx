@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/modal';
 import { ADOU } from '@/lib/types/config';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ldapUpdate } from '@/lib/backend-api';
 
 interface MoveObjectModalProps {
   isOpen: boolean;
@@ -23,21 +24,10 @@ export function MoveObjectModal({ isOpen, onClose, dn, name, ous, onSuccess }: M
     if (!newOU) return;
     try {
       setIsSubmitting(true);
-      const password = sessionStorage.getItem('ldap-password') || '';
-      const res = await fetch('/api/ldap/objects', {
-        method: 'PATCH',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-ldap-password': password 
-        },
-        body: JSON.stringify({ dn, action: 'move', payload: { newOU } }),
-      });
-
-      if (!res.ok) throw new Error('Failed to move object');
-      const data = await res.json();
+      const data: any = await ldapUpdate(dn, 'move', { newOU });
       
       toast.success(`Moved ${name} successfully`);
-      await onSuccess(data.newDN);
+      await onSuccess(data?.newDN);
       onClose();
     } catch (error: any) {
       toast.error(error.message);
