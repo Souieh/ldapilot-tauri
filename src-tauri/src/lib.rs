@@ -392,7 +392,7 @@ async fn get_dns_records(
     let profile = profiles.iter().find(|p| p.id == session.profile_id)
         .ok_or_else(|| "Profile not found".to_string())?;
 
-    Ok(Vec::new())
+    LdapHandler::get_dns_records(&profile.config, &session.user_dn, &session.password).await
 }
 
 #[tauri::command]
