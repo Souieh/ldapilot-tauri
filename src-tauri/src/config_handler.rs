@@ -13,7 +13,7 @@ pub struct ConfigHandler;
 
 impl ConfigHandler {
     pub fn get_config_dir(app: &AppHandle) -> PathBuf {
-        let mut path = app.path().app_config_dir().unwrap_or_else(|_| PathBuf::from("./config"));
+        let path = app.path().app_config_dir().unwrap_or_else(|_| PathBuf::from("./config"));
         if !path.exists() {
             fs::create_dir_all(&path).ok();
         }

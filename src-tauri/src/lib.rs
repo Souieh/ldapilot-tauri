@@ -7,6 +7,7 @@ use ldap_handler::LdapHandler;
 use config_handler::{AppState, ConfigHandler};
 use tauri::{AppHandle, State};
 use std::sync::Mutex;
+use serde::Serialize;
 
 #[tauri::command]
 async fn create_profile(
@@ -129,7 +130,7 @@ async fn get_session(
         Ok(serde_json::json!({
             "authenticated": true,
             "user": { "username": session.username },
-            "profile": profile.map(|p| serde_json::json!({ "name": p.name }))
+            "profile": profile.map(|p| serde_json::json!({ "id": p.id, "name": p.name }))
         }))
     } else {
         Ok(serde_json::json!({ "authenticated": false }))
@@ -202,23 +203,40 @@ async fn ldap_search(
     query: Option<String>,
     scope: Option<String>,
 ) -> Result<Vec<AdObject>, String> {
-    let session_guard = state.session.lock().unwrap();
-    let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
+    let session = {
+        let session_guard = state.session.lock().unwrap();
+        session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?.clone()
+    };
 
     let profiles = ConfigHandler::get_profiles(&app);
     let profile = profiles.iter().find(|p| p.id == session.profile_id)
         .ok_or_else(|| "Profile not found".to_string())?;
 
     let filter = match (object_type.as_str(), query.as_deref()) {
-        ("user", Some(q)) if !q.is_empty() => format!("(&(objectClass=user)(objectCategory=person)(|(cn=*{0}*)(sAMAccountName=*{0}*)(mail=*{0}*)(displayName=*{0}*)))", q),
+        ("user", Some(q)) if !q.is_empty() => {
+            let eq = LdapHandler::escape_filter(q);
+            format!("(&(objectClass=user)(objectCategory=person)(|(cn=*{0}*)(sAMAccountName=*{0}*)(mail=*{0}*)(displayName=*{0}*)))", eq)
+        },
         ("user", _) => "(&(objectClass=user)(objectCategory=person))".to_string(),
-        ("group", Some(q)) if !q.is_empty() => format!("(&(objectClass=group)(|(cn=*{0}*)(sAMAccountName=*{0}*)))", q),
+        ("group", Some(q)) if !q.is_empty() => {
+            let eq = LdapHandler::escape_filter(q);
+            format!("(&(objectClass=group)(|(cn=*{0}*)(sAMAccountName=*{0}*)))", eq)
+        },
         ("group", _) => "(objectClass=group)".to_string(),
-        ("computer", Some(q)) if !q.is_empty() => format!("(&(objectClass=computer)(|(cn=*{0}*)(sAMAccountName=*{0}*)))", q),
+        ("computer", Some(q)) if !q.is_empty() => {
+            let eq = LdapHandler::escape_filter(q);
+            format!("(&(objectClass=computer)(|(cn=*{0}*)(sAMAccountName=*{0}*)))", eq)
+        },
         ("computer", _) => "(objectClass=computer)".to_string(),
-        ("ou", Some(q)) if !q.is_empty() => format!("(&(objectClass=organizationalUnit)(|(ou=*{0}*)(name=*{0}*)))", q),
+        ("ou", Some(q)) if !q.is_empty() => {
+            let eq = LdapHandler::escape_filter(q);
+            format!("(&(objectClass=organizationalUnit)(|(ou=*{0}*)(name=*{0}*)))", eq)
+        },
         ("ou", _) => "(objectClass=organizationalUnit)".to_string(),
-        (_, Some(q)) if !q.is_empty() => format!("(|(cn=*{0}*)(sAMAccountName=*{0}*)(ou=*{0}*))", q),
+        (_, Some(q)) if !q.is_empty() => {
+            let eq = LdapHandler::escape_filter(q);
+            format!("(|(cn=*{0}*)(sAMAccountName=*{0}*)(ou=*{0}*))", eq)
+        },
         _ => "(objectClass=*)".to_string(),
     };
 
@@ -247,8 +265,10 @@ async fn ldap_update(
     action: String,
     payload: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    let session_guard = state.session.lock().unwrap();
-    let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
+    let session = {
+        let session_guard = state.session.lock().unwrap();
+        session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?.clone()
+    };
 
     let profiles = ConfigHandler::get_profiles(&app);
     let profile = profiles.iter().find(|p| p.id == session.profile_id)
@@ -295,8 +315,10 @@ async fn create_object(
     object_type: String,
     attributes: serde_json::Value,
 ) -> Result<(), String> {
-    let session_guard = state.session.lock().unwrap();
-    let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
+    let session = {
+        let session_guard = state.session.lock().unwrap();
+        session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?.clone()
+    };
 
     let profiles = ConfigHandler::get_profiles(&app);
     let profile = profiles.iter().find(|p| p.id == session.profile_id)
@@ -311,8 +333,10 @@ async fn delete_object(
     state: State<'_, AppState>,
     dn: String,
 ) -> Result<(), String> {
-    let session_guard = state.session.lock().unwrap();
-    let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
+    let session = {
+        let session_guard = state.session.lock().unwrap();
+        session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?.clone()
+    };
 
     let profiles = ConfigHandler::get_profiles(&app);
     let profile = profiles.iter().find(|p| p.id == session.profile_id)
@@ -328,8 +352,10 @@ async fn create_ou(
     parent_dn: Option<String>,
     ou_name: String,
 ) -> Result<(), String> {
-    let session_guard = state.session.lock().unwrap();
-    let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
+    let session = {
+        let session_guard = state.session.lock().unwrap();
+        session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?.clone()
+    };
 
     let profiles = ConfigHandler::get_profiles(&app);
     let profile = profiles.iter().find(|p| p.id == session.profile_id)
@@ -344,8 +370,10 @@ async fn delete_ou(
     state: State<'_, AppState>,
     ou_dn: String,
 ) -> Result<(), String> {
-    let session_guard = state.session.lock().unwrap();
-    let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
+    let session = {
+        let session_guard = state.session.lock().unwrap();
+        session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?.clone()
+    };
 
     let profiles = ConfigHandler::get_profiles(&app);
     let profile = profiles.iter().find(|p| p.id == session.profile_id)
@@ -359,8 +387,10 @@ async fn get_dashboard_stats(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<DashboardStats, String> {
-    let session_guard = state.session.lock().unwrap();
-    let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
+    let session = {
+        let session_guard = state.session.lock().unwrap();
+        session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?.clone()
+    };
 
     let profiles = ConfigHandler::get_profiles(&app);
     let profile = profiles.iter().find(|p| p.id == session.profile_id)
@@ -385,8 +415,10 @@ async fn get_dns_records(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<DnsRecord>, String> {
-    let session_guard = state.session.lock().unwrap();
-    let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
+    let session = {
+        let session_guard = state.session.lock().unwrap();
+        session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?.clone()
+    };
 
     let profiles = ConfigHandler::get_profiles(&app);
     let profile = profiles.iter().find(|p| p.id == session.profile_id)
@@ -401,7 +433,22 @@ async fn create_dns_record(
     state: State<'_, AppState>,
     payload: serde_json::Value,
 ) -> Result<(), String> {
-    Ok(())
+    let session = {
+        let session_guard = state.session.lock().unwrap();
+        session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?.clone()
+    };
+
+    let profiles = ConfigHandler::get_profiles(&app);
+    let profile = profiles.iter().find(|p| p.id == session.profile_id)
+        .ok_or_else(|| "Profile not found".to_string())?;
+
+    let zone = payload.get("zone").and_then(|v| v.as_str()).ok_or("Missing zone")?;
+    let name = payload.get("name").and_then(|v| v.as_str()).ok_or("Missing name")?;
+    let dns_type = payload.get("type").and_then(|v| v.as_str()).ok_or("Missing type")?;
+    let data = payload.get("data").and_then(|v| v.as_str()).ok_or("Missing data")?;
+    let ttl = payload.get("ttl").and_then(|v| v.as_u64()).unwrap_or(3600) as u32;
+
+    LdapHandler::create_dns_record(&profile.config, &session.user_dn, &session.password, zone, name, dns_type, data, ttl).await
 }
 
 #[tauri::command]
@@ -410,7 +457,24 @@ async fn update_dns_record(
     state: State<'_, AppState>,
     payload: serde_json::Value,
 ) -> Result<(), String> {
-    Ok(())
+    let session = {
+        let session_guard = state.session.lock().unwrap();
+        session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?.clone()
+    };
+
+    let profiles = ConfigHandler::get_profiles(&app);
+    let profile = profiles.iter().find(|p| p.id == session.profile_id)
+        .ok_or_else(|| "Profile not found".to_string())?;
+
+    let id = payload.get("id").and_then(|v| v.as_str()).ok_or("Missing id")?;
+    let zone = payload.get("zone").and_then(|v| v.as_str()).ok_or("Missing zone")?;
+    let name = payload.get("name").and_then(|v| v.as_str()).ok_or("Missing name")?;
+    let dns_type = payload.get("type").and_then(|v| v.as_str()).ok_or("Missing type")?;
+    let data = payload.get("data").and_then(|v| v.as_str()).ok_or("Missing data")?;
+    let ttl = payload.get("ttl").and_then(|v| v.as_u64()).unwrap_or(3600) as u32;
+
+    LdapHandler::delete_dns_record(&profile.config, &session.user_dn, &session.password, id).await?;
+    LdapHandler::create_dns_record(&profile.config, &session.user_dn, &session.password, zone, name, dns_type, data, ttl).await
 }
 
 #[tauri::command]
@@ -419,7 +483,16 @@ async fn delete_dns_record(
     state: State<'_, AppState>,
     id: String,
 ) -> Result<(), String> {
-    Ok(())
+    let session = {
+        let session_guard = state.session.lock().unwrap();
+        session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?.clone()
+    };
+
+    let profiles = ConfigHandler::get_profiles(&app);
+    let profile = profiles.iter().find(|p| p.id == session.profile_id)
+        .ok_or_else(|| "Profile not found".to_string())?;
+
+    LdapHandler::delete_dns_record(&profile.config, &session.user_dn, &session.password, &id).await
 }
 
 #[tauri::command]
@@ -428,8 +501,10 @@ async fn get_group_members(
     state: State<'_, AppState>,
     object_dn: String,
 ) -> Result<serde_json::Value, String> {
-    let session_guard = state.session.lock().unwrap();
-    let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
+    let session = {
+        let session_guard = state.session.lock().unwrap();
+        session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?.clone()
+    };
 
     let profiles = ConfigHandler::get_profiles(&app);
     let profile = profiles.iter().find(|p| p.id == session.profile_id)
@@ -455,8 +530,10 @@ async fn get_object_parents(
     state: State<'_, AppState>,
     object_dn: String,
 ) -> Result<serde_json::Value, String> {
-    let session_guard = state.session.lock().unwrap();
-    let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
+    let session = {
+        let session_guard = state.session.lock().unwrap();
+        session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?.clone()
+    };
 
     let profiles = ConfigHandler::get_profiles(&app);
     let profile = profiles.iter().find(|p| p.id == session.profile_id)
@@ -482,8 +559,10 @@ async fn get_object_permissions(
     state: State<'_, AppState>,
     object_dn: String,
 ) -> Result<serde_json::Value, String> {
-    let session_guard = state.session.lock().unwrap();
-    let session = session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?;
+    let session = {
+        let session_guard = state.session.lock().unwrap();
+        session_guard.as_ref().ok_or_else(|| "Unauthorized".to_string())?.clone()
+    };
 
     let profiles = ConfigHandler::get_profiles(&app);
     let profile = profiles.iter().find(|p| p.id == session.profile_id)

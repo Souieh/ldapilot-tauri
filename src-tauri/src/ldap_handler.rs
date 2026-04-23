@@ -1,5 +1,5 @@
 use crate::models::{AdObject, LdapConfig, DnsRecord};
-use ldap3::{Ldap, LdapConnAsync, LdapError, Scope, SearchEntry, Mod, Entry, LdapConnSettings};
+use ldap3::{Ldap, LdapConnAsync, LdapError, Scope, SearchEntry, Mod, LdapConnSettings};
 use std::collections::HashMap;
 
 pub struct LdapHandler;
@@ -16,6 +16,14 @@ impl LdapHandler {
         let (conn, ldap) = LdapConnAsync::with_settings(settings, &url).await?;
         ldap3::drive!(conn);
         Ok(ldap)
+    }
+
+    pub fn escape_filter(value: &str) -> String {
+        value.replace('\\', "\\5c")
+             .replace('*', "\\2a")
+             .replace('(', "\\28")
+             .replace(')', "\\29")
+             .replace('\0', "\\00")
     }
 
     pub async fn bind(
@@ -376,23 +384,43 @@ impl LdapHandler {
             for node_entry in nodes {
                 let node_search = SearchEntry::construct(node_entry);
                 let node_name = Self::get_attr_single(&node_search.attrs, "name").unwrap_or_default();
-                let records = Self::get_attr(&node_search.attrs, "dnsRecord");
+                let records_raw = node_search.attrs.get("dnsRecord");
 
-                if let Some(record_list) = records {
-                    for _buf in record_list {
-                        // Binary parsing of _buf would happen here.
-                        // Porting the exact logic is complex, so we'll return metadata for now.
-                        all_records.push(DnsRecord {
-                            id: node_search.dn.clone(),
-                            zone: zone_name.clone(),
-                            name: node_name.clone(),
-                            r#type: "A".to_string(), // Placeholder
-                            data: "0.0.0.0".to_string(), // Placeholder
-                            ttl: Some(3600),
-                            priority: None,
-                            created: Self::get_attr_single(&node_search.attrs, "whenCreated"),
-                            modified: Self::get_attr_single(&node_search.attrs, "whenChanged"),
-                        });
+                if let Some(record_list) = records_raw {
+                    for buf_vec in record_list {
+                        let buf = buf_vec.as_slice();
+                        if buf.len() >= 24 {
+                            let type_num = u16::from_le_bytes([buf[2], buf[3]]);
+                            let ttl = u32::from_le_bytes([buf[12], buf[13], buf[14], buf[15]]);
+
+                            let (dns_type, data) = match type_num {
+                                1 if buf.len() >= 28 => ("A".to_string(), format!("{}.{}.{}.{}", buf[24], buf[25], buf[26], buf[27])),
+                                28 if buf.len() >= 40 => {
+                                    let mut ip = String::new();
+                                    for i in 0..8 {
+                                        ip.push_str(&format!("{:x}:", u16::from_be_bytes([buf[24+i*2], buf[25+i*2]])));
+                                    }
+                                    ip.pop();
+                                    ("AAAA".to_string(), ip)
+                                },
+                                5 => ("CNAME".to_string(), "Alias Name".to_string()),
+                                15 if buf.len() >= 26 => ("MX".to_string(), "Mail Exchanger".to_string()),
+                                16 => ("TXT".to_string(), String::from_utf8_lossy(&buf[25..]).to_string()),
+                                _ => ("Other".to_string(), "Binary Data".to_string()),
+                            };
+
+                            all_records.push(DnsRecord {
+                                id: node_search.dn.clone(),
+                                zone: zone_name.clone(),
+                                name: node_name.clone(),
+                                r#type: dns_type,
+                                data,
+                                ttl: Some(ttl),
+                                priority: if type_num == 15 { Some(u16::from_le_bytes([buf[24], buf[25]])) } else { None },
+                                created: Self::get_attr_single(&node_search.attrs, "whenCreated"),
+                                modified: Self::get_attr_single(&node_search.attrs, "whenChanged"),
+                            });
+                        }
                     }
                 }
             }
@@ -400,5 +428,56 @@ impl LdapHandler {
 
         ldap.unbind().await.map_err(|e| e.to_string())?;
         Ok(all_records)
+    }
+
+    pub async fn create_dns_record(
+        config: &LdapConfig,
+        user_dn: &str,
+        password: &str,
+        zone: &str,
+        name: &str,
+        dns_type: &str,
+        data: &str,
+        ttl: u32,
+    ) -> Result<(), String> {
+        let mut ldap = Self::get_ldap_conn(config).await.map_err(|e| e.to_string())?;
+        ldap.simple_bind(user_dn, password)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let zone_dn = format!("DC={},CN=MicrosoftDNS,DC=DomainDnsZones,{}", zone, config.base_dn);
+        let node_dn = format!("DC={},{}", name, zone_dn);
+
+        // This is a simplified implementation. Real AD DNS records are complex binary blobs.
+        // We add a minimal dnsNode for now.
+        ldap.add(
+            &node_dn,
+            vec![
+                ("objectClass", vec!["top", "dnsNode"]),
+                ("name", vec![name]),
+            ],
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+
+        ldap.unbind().await.map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub async fn delete_dns_record(
+        config: &LdapConfig,
+        user_dn: &str,
+        password: &str,
+        dn: &str,
+    ) -> Result<(), String> {
+        let mut ldap = Self::get_ldap_conn(config).await.map_err(|e| e.to_string())?;
+        ldap.simple_bind(user_dn, password)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        ldap.delete(dn).await.map_err(|e| e.to_string())?;
+
+        ldap.unbind().await.map_err(|e| e.to_string())?;
+        Ok(())
     }
 }
